@@ -1,0 +1,37 @@
+# claude specific ignores
+.claude
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# cerfificate ssl
+*.crt
+*.key
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+#container file
+*.yml
+Dockerfile
+
+# Dependency directories (uncomment the following line to ignore vendor/ directory)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Editor/IDE-specific files (optional, can also be added to a global gitignore)
+.idea/
+.vscode/
