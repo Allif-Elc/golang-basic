@@ -1,10 +1,11 @@
-package middleware
+package middleware_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"golang-basic/internal/model"
+	"golang-basic/api/internal/middleware"
+	"golang-basic/api/internal/model"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -40,13 +41,13 @@ func TestRequirePermission_Allowed(t *testing.T) {
 		},
 	}
 
-	middleware := NewAuthorizationMiddleware(mockService)
+	mid := middleware.NewAuthorizationMiddleware(mockService)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"message": "success"})
 	})
 
-	protectedHandler := middleware.RequirePermission("employee_records", "read")(testHandler)
+	protectedHandler := mid.RequirePermission("employee_records", "read")(testHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/employee-records", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -76,13 +77,13 @@ func TestRequirePermission_Denied(t *testing.T) {
 		},
 	}
 
-	middleware := NewAuthorizationMiddleware(mockService)
+	mid := middleware.NewAuthorizationMiddleware(mockService)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"message": "success"})
 	})
 
-	protectedHandler := middleware.RequirePermission("employee_records", "read")(testHandler)
+	protectedHandler := mid.RequirePermission("employee_records", "read")(testHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/employee-records", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -105,12 +106,12 @@ func TestRequirePermission_Denied(t *testing.T) {
 func TestRequirePermission_MissingUserID(t *testing.T) {
 	mockService := &MockAuthAuthorizationService{}
 
-	middleware := NewAuthorizationMiddleware(mockService)
+	mid := middleware.NewAuthorizationMiddleware(mockService)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	protectedHandler := middleware.RequirePermission("employee_records", "read")(testHandler)
+	protectedHandler := mid.RequirePermission("employee_records", "read")(testHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/employee-records", nil)
 	// No X-User-ID header
@@ -133,12 +134,12 @@ func TestRequirePermission_MissingUserID(t *testing.T) {
 func TestRequirePermission_InvalidUserID(t *testing.T) {
 	mockService := &MockAuthAuthorizationService{}
 
-	middleware := NewAuthorizationMiddleware(mockService)
+	mid := middleware.NewAuthorizationMiddleware(mockService)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	protectedHandler := middleware.RequirePermission("employee_records", "read")(testHandler)
+	protectedHandler := mid.RequirePermission("employee_records", "read")(testHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/employee-records", nil)
 	req.Header.Set("X-User-ID", "invalid")
@@ -158,12 +159,12 @@ func TestRequirePermission_ServiceError(t *testing.T) {
 		},
 	}
 
-	middleware := NewAuthorizationMiddleware(mockService)
+	mid := middleware.NewAuthorizationMiddleware(mockService)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	protectedHandler := middleware.RequirePermission("employee_records", "read")(testHandler)
+	protectedHandler := mid.RequirePermission("employee_records", "read")(testHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/employee-records", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -187,13 +188,13 @@ func TestRequireRole_Allowed(t *testing.T) {
 		},
 	}
 
-	middleware := NewAuthorizationMiddleware(mockService)
+	mid := middleware.NewAuthorizationMiddleware(mockService)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"message": "success"})
 	})
 
-	protectedHandler := middleware.RequireRole("HR")(testHandler)
+	protectedHandler := mid.RequireRole("HR")(testHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -216,12 +217,12 @@ func TestRequireRole_Denied(t *testing.T) {
 		},
 	}
 
-	middleware := NewAuthorizationMiddleware(mockService)
+	mid := middleware.NewAuthorizationMiddleware(mockService)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	protectedHandler := middleware.RequireRole("Manager")(testHandler)
+	protectedHandler := mid.RequireRole("Manager")(testHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -243,7 +244,7 @@ func TestRequireRole_Denied(t *testing.T) {
 
 func TestSetUserIDInContext_ValidUserID(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := r.Context().Value(UserIDKey)
+		userID := r.Context().Value(middleware.UserIDKey)
 		if userID == nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": "user ID not found in context"})
@@ -261,8 +262,8 @@ func TestSetUserIDInContext_ValidUserID(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]interface{}{"user_id": userIDInt})
 	})
 
-	middleware := SetUserIDInContext()
-	protectedHandler := middleware(handler)
+	setUserMiddleware := middleware.SetUserIDInContext()
+	protectedHandler := setUserMiddleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set("X-User-ID", "123")
@@ -284,7 +285,7 @@ func TestSetUserIDInContext_ValidUserID(t *testing.T) {
 
 func TestSetUserIDInContext_NoUserIDHeader(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := r.Context().Value(UserIDKey)
+		userID := r.Context().Value(middleware.UserIDKey)
 		if userID != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": "user ID should not be in context"})
@@ -295,8 +296,8 @@ func TestSetUserIDInContext_NoUserIDHeader(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]string{"message": "no user ID in context"})
 	})
 
-	middleware := SetUserIDInContext()
-	protectedHandler := middleware(handler)
+	setUserMiddleware := middleware.SetUserIDInContext()
+	protectedHandler := setUserMiddleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	// No X-User-ID header
@@ -319,15 +320,22 @@ func TestResourceFromPath(t *testing.T) {
 		{"/employee-records", "employee_records"},
 		{"/api/v1/user-profiles", "user_profiles"},
 		{"/", "unknown"},
-		{"", "unknown"},
 	}
 
 	for _, tt := range tests {
 		req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-		result := ResourceFromPath(req)
+		result := middleware.ResourceFromPath(req)
 		if result != tt.expectedResult {
 			t.Errorf("ResourceFromPath(%s) = %s, expected %s", tt.path, result, tt.expectedResult)
 		}
+	}
+
+	// Test empty path separately
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.URL.Path = ""
+	result := middleware.ResourceFromPath(req)
+	if result != "unknown" {
+		t.Errorf("ResourceFromPath(empty) = %s, expected unknown", result)
 	}
 }
 
@@ -345,7 +353,7 @@ func TestActionFromMethod(t *testing.T) {
 
 	for _, tt := range tests {
 		req := httptest.NewRequest(tt.method, "/api/test", nil)
-		result := ActionFromMethod(req)
+		result := middleware.ActionFromMethod(req)
 		if result != tt.expectedResult {
 			t.Errorf("ActionFromMethod(%s) = %s, expected %s", tt.method, result, tt.expectedResult)
 		}
@@ -359,9 +367,9 @@ func TestRequirePermission_ChainedMiddleware(t *testing.T) {
 		},
 	}
 
-	middleware := NewAuthorizationMiddleware(mockService)
+	mid := middleware.NewAuthorizationMiddleware(mockService)
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := r.Context().Value(UserIDKey)
+		userID := r.Context().Value(middleware.UserIDKey)
 		if userID == nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -375,8 +383,8 @@ func TestRequirePermission_ChainedMiddleware(t *testing.T) {
 	})
 
 	// Chain middlewares: SetUserIDInContext -> RequirePermission
-	protectedHandler := SetUserIDInContext()(
-		middleware.RequirePermission("employee_records", "read")(testHandler),
+	protectedHandler := middleware.SetUserIDInContext()(
+		mid.RequirePermission("employee_records", "read")(testHandler),
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/employee-records", nil)

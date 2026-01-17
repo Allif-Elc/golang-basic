@@ -3,12 +3,12 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"golang-basic/internal/model"
-	"golang-basic/internal/service"
-	"golang-basic/internal/utility"
+	"golang-basic/api/internal/model"
+	"golang-basic/api/internal/utility"
 	"net/http"
 	"strconv"
-	"strings"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type ProfileServiceInterface interface {
@@ -23,16 +23,11 @@ type ProfileController struct {
 	service ProfileServiceInterface
 }
 
-func NewProfileController(service *service.ProfileService) *ProfileController {
+func NewProfileController(service ProfileServiceInterface) *ProfileController {
 	return &ProfileController{service: service}
 }
 
 func (c *ProfileController) CreateProfile(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	var req model.CreateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
@@ -50,11 +45,6 @@ func (c *ProfileController) CreateProfile(w http.ResponseWriter, r *http.Request
 }
 
 func (c *ProfileController) UpdateProfile(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	var req model.UpdateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
@@ -72,11 +62,6 @@ func (c *ProfileController) UpdateProfile(w http.ResponseWriter, r *http.Request
 }
 
 func (c *ProfileController) GetAllProfiles(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	// Parse pagination parameters from query string
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
@@ -105,13 +90,8 @@ func (c *ProfileController) GetAllProfiles(w http.ResponseWriter, r *http.Reques
 }
 
 func (c *ProfileController) GetProfileByID(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/profiles/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid profile ID")
 		return
@@ -128,13 +108,8 @@ func (c *ProfileController) GetProfileByID(w http.ResponseWriter, r *http.Reques
 }
 
 func (c *ProfileController) DeleteProfile(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/profiles/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid profile ID")
 		return
@@ -147,30 +122,4 @@ func (c *ProfileController) DeleteProfile(w http.ResponseWriter, r *http.Request
 	}
 
 	utility.SendSuccess(w, http.StatusOK, "Profile deleted successfully", nil)
-}
-
-func (c *ProfileController) HandleProfileRoutes(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.URL.Path == "/profiles" || r.URL.Path == "/profiles/" {
-		if r.Method == http.MethodPost {
-			c.CreateProfile(w, r)
-		} else if r.Method == http.MethodGet {
-			c.GetAllProfiles(w, r)
-		} else if r.Method == http.MethodPut {
-			c.UpdateProfile(w, r)
-		} else {
-			utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	} else if strings.HasPrefix(r.URL.Path, "/profiles/") {
-		if r.Method == http.MethodGet {
-			c.GetProfileByID(w, r)
-		} else if r.Method == http.MethodDelete {
-			c.DeleteProfile(w, r)
-		} else {
-			utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	} else {
-		utility.SendError(w, http.StatusNotFound, "Route not found")
-	}
 }

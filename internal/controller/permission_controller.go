@@ -3,11 +3,12 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"golang-basic/internal/model"
-	"golang-basic/internal/utility"
+	"golang-basic/api/internal/model"
+	"golang-basic/api/internal/utility"
 	"net/http"
 	"strconv"
-	"strings"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // PermissionServiceInterface defines the interface for permission service operations
@@ -43,11 +44,6 @@ func NewPermissionController(service PermissionServiceInterface) *PermissionCont
 
 // CreateAttribute handles POST /attributes
 func (c *PermissionController) CreateAttribute(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	var req model.CreateAttributesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
@@ -65,13 +61,8 @@ func (c *PermissionController) CreateAttribute(w http.ResponseWriter, r *http.Re
 
 // GetAttributeByID handles GET /attributes/{id}
 func (c *PermissionController) GetAttributeByID(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/attributes/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid attribute ID")
 		return
@@ -88,11 +79,6 @@ func (c *PermissionController) GetAttributeByID(w http.ResponseWriter, r *http.R
 
 // ListAttributes handles GET /attributes
 func (c *PermissionController) ListAttributes(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	attributes, err := c.service.ListAttributes(r.Context())
 	if err != nil {
 		utility.SendError(w, http.StatusInternalServerError, err.Error())
@@ -104,13 +90,8 @@ func (c *PermissionController) ListAttributes(w http.ResponseWriter, r *http.Req
 
 // DeleteAttribute handles DELETE /attributes/{id}
 func (c *PermissionController) DeleteAttribute(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/attributes/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid attribute ID")
 		return
@@ -129,11 +110,6 @@ func (c *PermissionController) DeleteAttribute(w http.ResponseWriter, r *http.Re
 
 // CreateResource handles POST /resources
 func (c *PermissionController) CreateResource(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	var req model.CreateResoucesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
@@ -151,13 +127,8 @@ func (c *PermissionController) CreateResource(w http.ResponseWriter, r *http.Req
 
 // GetResourceByID handles GET /resources/{id}
 func (c *PermissionController) GetResourceByID(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/resources/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid resource ID")
 		return
@@ -174,11 +145,6 @@ func (c *PermissionController) GetResourceByID(w http.ResponseWriter, r *http.Re
 
 // ListResources handles GET /resources
 func (c *PermissionController) ListResources(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	resources, err := c.service.ListResources(r.Context())
 	if err != nil {
 		utility.SendError(w, http.StatusInternalServerError, err.Error())
@@ -190,13 +156,8 @@ func (c *PermissionController) ListResources(w http.ResponseWriter, r *http.Requ
 
 // DeleteResource handles DELETE /resources/{id}
 func (c *PermissionController) DeleteResource(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/resources/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid resource ID")
 		return
@@ -215,11 +176,6 @@ func (c *PermissionController) DeleteResource(w http.ResponseWriter, r *http.Req
 
 // CreatePermission handles POST /permissions
 func (c *PermissionController) CreatePermission(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	var req model.CreatePermissionsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
@@ -237,13 +193,8 @@ func (c *PermissionController) CreatePermission(w http.ResponseWriter, r *http.R
 
 // GetPermissionByID handles GET /permissions/{id}
 func (c *PermissionController) GetPermissionByID(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/permissions/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid permission ID")
 		return
@@ -260,11 +211,6 @@ func (c *PermissionController) GetPermissionByID(w http.ResponseWriter, r *http.
 
 // ListPermissions handles GET /permissions
 func (c *PermissionController) ListPermissions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	permissions, err := c.service.ListPermissions(r.Context())
 	if err != nil {
 		utility.SendError(w, http.StatusInternalServerError, err.Error())
@@ -276,13 +222,8 @@ func (c *PermissionController) ListPermissions(w http.ResponseWriter, r *http.Re
 
 // DeletePermission handles DELETE /permissions/{id}
 func (c *PermissionController) DeletePermission(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/permissions/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid permission ID")
 		return
@@ -295,64 +236,4 @@ func (c *PermissionController) DeletePermission(w http.ResponseWriter, r *http.R
 	}
 
 	utility.SendSuccess(w, http.StatusOK, "Permission deleted successfully", nil)
-}
-
-// ==================== Route Handler ====================
-
-// HandlePermissionRoutes routes all permission-related requests
-func (c *PermissionController) HandlePermissionRoutes(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	// Attribute routes
-	if r.URL.Path == "/attributes" || r.URL.Path == "/attributes/" {
-		if r.Method == http.MethodPost {
-			c.CreateAttribute(w, r)
-		} else if r.Method == http.MethodGet {
-			c.ListAttributes(w, r)
-		} else {
-			utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	} else if strings.HasPrefix(r.URL.Path, "/attributes/") {
-		if r.Method == http.MethodGet {
-			c.GetAttributeByID(w, r)
-		} else if r.Method == http.MethodDelete {
-			c.DeleteAttribute(w, r)
-		} else {
-			utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	} else if r.URL.Path == "/resources" || r.URL.Path == "/resources/" {
-		if r.Method == http.MethodPost {
-			c.CreateResource(w, r)
-		} else if r.Method == http.MethodGet {
-			c.ListResources(w, r)
-		} else {
-			utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	} else if strings.HasPrefix(r.URL.Path, "/resources/") {
-		if r.Method == http.MethodGet {
-			c.GetResourceByID(w, r)
-		} else if r.Method == http.MethodDelete {
-			c.DeleteResource(w, r)
-		} else {
-			utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	} else if r.URL.Path == "/permissions" || r.URL.Path == "/permissions/" {
-		if r.Method == http.MethodPost {
-			c.CreatePermission(w, r)
-		} else if r.Method == http.MethodGet {
-			c.ListPermissions(w, r)
-		} else {
-			utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	} else if strings.HasPrefix(r.URL.Path, "/permissions/") {
-		if r.Method == http.MethodGet {
-			c.GetPermissionByID(w, r)
-		} else if r.Method == http.MethodDelete {
-			c.DeletePermission(w, r)
-		} else {
-			utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	} else {
-		utility.SendError(w, http.StatusNotFound, "Route not found")
-	}
 }

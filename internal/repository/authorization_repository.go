@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"golang-basic/internal/model"
+	"golang-basic/api/internal/model"
 	"time"
 )
 

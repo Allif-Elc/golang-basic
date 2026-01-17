@@ -1,14 +1,17 @@
-package controller
+package controller_test
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"golang-basic/internal/model"
+	"golang-basic/api/internal/controller"
+	"golang-basic/api/internal/model"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type MockUserService struct {
@@ -34,6 +37,18 @@ func (m *MockUserService) GetUserByID(ctx context.Context, id int64) (model.User
 	return m.GetUserByIDFunc(ctx, id)
 }
 
+// setupTestRouter creates a Chi router with user routes for testing
+func setupTestRouter(userCtrl *controller.UserController) *chi.Mux {
+	r := chi.NewRouter()
+	r.Route("/users", func(r chi.Router) {
+		r.Post("/", userCtrl.CreateUser)
+		r.Get("/", userCtrl.GetAllUsers)
+		r.Put("/", userCtrl.UpdateUser)
+		r.Get("/{id}", userCtrl.GetUserByID)
+	})
+	return r
+}
+
 func TestCreateUser_Success(t *testing.T) {
 	mockService := &MockUserService{
 		CreateUserFunc: func(ctx context.Context, req model.CreateUserRequest) (*model.User, error) {
@@ -44,7 +59,7 @@ func TestCreateUser_Success(t *testing.T) {
 		},
 	}
 
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	reqBody := model.CreateUserRequest{
 		Name:  "John Doe",
@@ -55,7 +70,7 @@ func TestCreateUser_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreateUser(w, req)
+	ctrl.CreateUser(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("Expected status code %d, got %d", http.StatusCreated, w.Code)
@@ -71,12 +86,12 @@ func TestCreateUser_Success(t *testing.T) {
 
 func TestCreateUser_InvalidMethod(t *testing.T) {
 	mockService := &MockUserService{}
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/users", nil)
 	w := httptest.NewRecorder()
 
-	controller.CreateUser(w, req)
+	ctrl.CreateUser(w, req)
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
@@ -85,12 +100,12 @@ func TestCreateUser_InvalidMethod(t *testing.T) {
 
 func TestCreateUser_InvalidRequestBody(t *testing.T) {
 	mockService := &MockUserService{}
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewBuffer([]byte("invalid json")))
 	w := httptest.NewRecorder()
 
-	controller.CreateUser(w, req)
+	ctrl.CreateUser(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -111,7 +126,7 @@ func TestCreateUser_ServiceError(t *testing.T) {
 		},
 	}
 
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	reqBody := model.CreateUserRequest{
 		Name:  "John Doe",
@@ -122,7 +137,7 @@ func TestCreateUser_ServiceError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreateUser(w, req)
+	ctrl.CreateUser(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -143,7 +158,7 @@ func TestUpdateUser_Success(t *testing.T) {
 		},
 	}
 
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	reqBody := model.UpdateUserRequest{
 		UserId:   1,
@@ -156,7 +171,7 @@ func TestUpdateUser_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/users", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.UpdateUser(w, req)
+	ctrl.UpdateUser(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -172,12 +187,12 @@ func TestUpdateUser_Success(t *testing.T) {
 
 func TestUpdateUser_InvalidMethod(t *testing.T) {
 	mockService := &MockUserService{}
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/users", nil)
 	w := httptest.NewRecorder()
 
-	controller.UpdateUser(w, req)
+	ctrl.UpdateUser(w, req)
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
@@ -186,12 +201,12 @@ func TestUpdateUser_InvalidMethod(t *testing.T) {
 
 func TestUpdateUser_InvalidRequestBody(t *testing.T) {
 	mockService := &MockUserService{}
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	req := httptest.NewRequest(http.MethodPut, "/users", bytes.NewBuffer([]byte("{invalid}")))
 	w := httptest.NewRecorder()
 
-	controller.UpdateUser(w, req)
+	ctrl.UpdateUser(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -205,7 +220,7 @@ func TestUpdateUser_ServiceError(t *testing.T) {
 		},
 	}
 
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	reqBody := model.UpdateUserRequest{
 		UserId: 999,
@@ -216,7 +231,7 @@ func TestUpdateUser_ServiceError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/users", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.UpdateUser(w, req)
+	ctrl.UpdateUser(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -237,12 +252,12 @@ func TestGetAllUsers_Success(t *testing.T) {
 		},
 	}
 
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/users", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetAllUsers(w, req)
+	ctrl.GetAllUsers(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -258,12 +273,12 @@ func TestGetAllUsers_Success(t *testing.T) {
 
 func TestGetAllUsers_InvalidMethod(t *testing.T) {
 	mockService := &MockUserService{}
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	req := httptest.NewRequest(http.MethodPost, "/users", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetAllUsers(w, req)
+	ctrl.GetAllUsers(w, req)
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
@@ -279,12 +294,12 @@ func TestGetAllUsers_EmptyList(t *testing.T) {
 		},
 	}
 
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/users", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetAllUsers(w, req)
+	ctrl.GetAllUsers(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -303,12 +318,13 @@ func TestGetUserByID_Success(t *testing.T) {
 		},
 	}
 
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
+	r := setupTestRouter(ctrl)
 
 	req := httptest.NewRequest(http.MethodGet, "/users/1", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetUserByID(w, req)
+	r.ServeHTTP(w, req) // Use router instead of direct call
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -322,28 +338,16 @@ func TestGetUserByID_Success(t *testing.T) {
 	}
 }
 
-func TestGetUserByID_InvalidMethod(t *testing.T) {
-	mockService := &MockUserService{}
-	controller := &UserController{service: mockService}
-
-	req := httptest.NewRequest(http.MethodPost, "/users/1", nil)
-	w := httptest.NewRecorder()
-
-	controller.GetUserByID(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
-	}
-}
+// Note: TestGetUserByID_InvalidMethod removed - Chi handles method checking
 
 func TestGetUserByID_InvalidID(t *testing.T) {
 	mockService := &MockUserService{}
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/users/invalid", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetUserByID(w, req)
+	ctrl.GetUserByID(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -364,12 +368,12 @@ func TestGetUserByID_UserNotFound(t *testing.T) {
 		},
 	}
 
-	controller := &UserController{service: mockService}
+	ctrl := controller.NewUserController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/users/999", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetUserByID(w, req)
+	ctrl.GetUserByID(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("Expected status code %d, got %d", http.StatusNotFound, w.Code)
@@ -380,119 +384,5 @@ func TestGetUserByID_UserNotFound(t *testing.T) {
 
 	if response["status"] != "error" {
 		t.Errorf("Expected status 'error', got '%s'", response["status"])
-	}
-}
-
-func TestHandleUserRoutes_CreateUser(t *testing.T) {
-	mockService := &MockUserService{
-		CreateUserFunc: func(ctx context.Context, req model.CreateUserRequest) (*model.User, error) {
-			return &model.User{UserId: 1, Name: req.Name}, nil
-		},
-	}
-
-	controller := &UserController{service: mockService}
-
-	reqBody := model.CreateUserRequest{
-		Name:  "John Doe",
-		Email: "john@example.com",
-	}
-
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewBuffer(body))
-	w := httptest.NewRecorder()
-
-	controller.HandleUserRoutes(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Errorf("Expected status code %d, got %d", http.StatusCreated, w.Code)
-	}
-}
-
-func TestHandleUserRoutes_GetAllUsers(t *testing.T) {
-	mockService := &MockUserService{
-		GetAllUsersFunc: func(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.User], error) {
-			return &model.PageResult[model.User]{
-				Data: []model.User{{UserId: 1, Name: "John Doe"}},
-			}, nil
-		},
-	}
-
-	controller := &UserController{service: mockService}
-
-	req := httptest.NewRequest(http.MethodGet, "/users", nil)
-	w := httptest.NewRecorder()
-
-	controller.HandleUserRoutes(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
-	}
-}
-
-func TestHandleUserRoutes_UpdateUser(t *testing.T) {
-	mockService := &MockUserService{
-		UpdateUserFunc: func(ctx context.Context, req model.UpdateUserRequest) error {
-			return nil
-		},
-	}
-
-	controller := &UserController{service: mockService}
-
-	reqBody := model.UpdateUserRequest{UserId: 1, Name: "Updated Name"}
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPut, "/users", bytes.NewBuffer(body))
-	w := httptest.NewRecorder()
-
-	controller.HandleUserRoutes(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
-	}
-}
-
-func TestHandleUserRoutes_GetUserByID(t *testing.T) {
-	mockService := &MockUserService{
-		GetUserByIDFunc: func(ctx context.Context, id int64) (model.User, error) {
-			return model.User{UserId: id, Name: "John Doe"}, nil
-		},
-	}
-
-	controller := &UserController{service: mockService}
-
-	req := httptest.NewRequest(http.MethodGet, "/users/1", nil)
-	w := httptest.NewRecorder()
-
-	controller.HandleUserRoutes(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
-	}
-}
-
-func TestHandleUserRoutes_InvalidRoute(t *testing.T) {
-	mockService := &MockUserService{}
-	controller := &UserController{service: mockService}
-
-	req := httptest.NewRequest(http.MethodGet, "/invalid/route", nil)
-	w := httptest.NewRecorder()
-
-	controller.HandleUserRoutes(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("Expected status code %d, got %d", http.StatusNotFound, w.Code)
-	}
-}
-
-func TestHandleUserRoutes_MethodNotAllowed(t *testing.T) {
-	mockService := &MockUserService{}
-	controller := &UserController{service: mockService}
-
-	req := httptest.NewRequest(http.MethodDelete, "/users", nil)
-	w := httptest.NewRecorder()
-
-	controller.HandleUserRoutes(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
 	}
 }

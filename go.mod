@@ -1,10 +1,14 @@
-module golang-basic
+module golang-basic/api
 
 go 1.24.0
 
 toolchain go1.24.11
 
-require github.com/jackc/pgx/v5 v5.8.0
+require (
+	github.com/go-chi/chi/v5 v5.2.4
+	github.com/go-chi/cors v1.2.2
+	github.com/jackc/pgx/v5 v5.8.0
+)
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect

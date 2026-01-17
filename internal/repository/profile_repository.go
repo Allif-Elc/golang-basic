@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"golang-basic/internal/model"
+	"golang-basic/api/internal/model"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

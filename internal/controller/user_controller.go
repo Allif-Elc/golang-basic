@@ -3,11 +3,12 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"golang-basic/internal/model"
-	"golang-basic/internal/utility"
+	"golang-basic/api/internal/model"
+	"golang-basic/api/internal/utility"
 	"net/http"
 	"strconv"
-	"strings"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type UserServiceInterface interface {
@@ -26,11 +27,6 @@ func NewUserController(service UserServiceInterface) *UserController {
 }
 
 func (c *UserController) CreateUser(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	var req model.CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
@@ -47,11 +43,6 @@ func (c *UserController) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *UserController) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	var req model.UpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
@@ -68,11 +59,6 @@ func (c *UserController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *UserController) GetAllUsers(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
 	// Parse pagination parameters from query string
 	page := 1
 	size := 10
@@ -110,13 +96,8 @@ func (c *UserController) GetAllUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *UserController) GetUserByID(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/users/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid user ID")
 		return
@@ -129,24 +110,4 @@ func (c *UserController) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utility.SendSuccess(w, http.StatusOK, "User retrieved successfully", user)
-}
-
-func (c *UserController) HandleUserRoutes(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.URL.Path == "/users" || r.URL.Path == "/users/" {
-		if r.Method == http.MethodPost {
-			c.CreateUser(w, r)
-		} else if r.Method == http.MethodGet {
-			c.GetAllUsers(w, r)
-		} else if r.Method == http.MethodPut {
-			c.UpdateUser(w, r)
-		} else {
-			utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	} else if strings.HasPrefix(r.URL.Path, "/users/") {
-		c.GetUserByID(w, r)
-	} else {
-		utility.SendError(w, http.StatusNotFound, "Route not found")
-	}
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"golang-basic/internal/model"
+	"golang-basic/api/internal/model"
 	"net/http"
 	"strconv"
 	"strings"

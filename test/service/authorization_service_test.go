@@ -1,10 +1,11 @@
-package service
+package service_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"golang-basic/internal/model"
+	"golang-basic/api/internal/model"
+	"golang-basic/api/internal/service"
 	"testing"
 	"time"
 )
@@ -69,14 +70,14 @@ func TestAuthorize_HR_AllowedReadEmployeeRecords(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   1,
 		Resource: "employee_records",
 		Action:   "read",
 	}
 
-	resp, err := service.Authorize(context.Background(), req)
+	resp, err := svc.Authorize(context.Background(), req)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -100,14 +101,14 @@ func TestAuthorize_HR_AllowedWriteEmployeeRecords(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   1,
 		Resource: "employee_records",
 		Action:   "write",
 	}
 
-	resp, err := service.Authorize(context.Background(), req)
+	resp, err := svc.Authorize(context.Background(), req)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -131,14 +132,14 @@ func TestAuthorize_Manager_AllowedReadBudgetReport(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   2,
 		Resource: "budget_report",
 		Action:   "read",
 	}
 
-	resp, err := service.Authorize(context.Background(), req)
+	resp, err := svc.Authorize(context.Background(), req)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -162,14 +163,14 @@ func TestAuthorize_Engineer_AllowedReadEmployeeRecords(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   3,
 		Resource: "employee_records",
 		Action:   "read",
 	}
 
-	resp, err := service.Authorize(context.Background(), req)
+	resp, err := svc.Authorize(context.Background(), req)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -191,14 +192,14 @@ func TestAuthorize_Engineer_DeniedBudgetReport(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   3,
 		Resource: "budget_report",
 		Action:   "read",
 	}
 
-	resp, err := service.Authorize(context.Background(), req)
+	resp, err := svc.Authorize(context.Background(), req)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -228,14 +229,14 @@ func TestAuthorize_Staff_DeniedEmployeeRecords(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   4,
 		Resource: "employee_records",
 		Action:   "read",
 	}
 
-	resp, err := service.Authorize(context.Background(), req)
+	resp, err := svc.Authorize(context.Background(), req)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -256,14 +257,14 @@ func TestAuthorize_NoRolesAssigned(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   5,
 		Resource: "employee_records",
 		Action:   "read",
 	}
 
-	resp, err := service.Authorize(context.Background(), req)
+	resp, err := svc.Authorize(context.Background(), req)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -286,14 +287,14 @@ func TestAuthorize_UserRolesError(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   1,
 		Resource: "employee_records",
 		Action:   "read",
 	}
 
-	_, err := service.Authorize(context.Background(), req)
+	_, err := svc.Authorize(context.Background(), req)
 
 	if err == nil {
 		t.Fatalf("Expected error, got nil")
@@ -315,14 +316,14 @@ func TestAuthorize_PoliciesError(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   1,
 		Resource: "employee_records",
 		Action:   "read",
 	}
 
-	_, err := service.Authorize(context.Background(), req)
+	_, err := svc.Authorize(context.Background(), req)
 
 	if err == nil {
 		t.Fatalf("Expected error, got nil")
@@ -349,14 +350,14 @@ func TestAuthorize_MultipleRoles_Allowed(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   6,
 		Resource: "budget_report",
 		Action:   "read",
 	}
 
-	resp, err := service.Authorize(context.Background(), req)
+	resp, err := svc.Authorize(context.Background(), req)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -377,9 +378,9 @@ func TestHasPermission_Allowed(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 
-	allowed, err := service.HasPermission(context.Background(), 1, "employee_records", "read")
+	allowed, err := svc.HasPermission(context.Background(), 1, "employee_records", "read")
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -400,9 +401,9 @@ func TestHasPermission_Denied(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 
-	allowed, err := service.HasPermission(context.Background(), 4, "employee_records", "read")
+	allowed, err := svc.HasPermission(context.Background(), 4, "employee_records", "read")
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -429,7 +430,7 @@ func TestBatchAuthorize_MultipleRequests(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 
 	requests := []model.AuthorizeRequest{
 		{Resource: "employee_records", Action: "read"},
@@ -437,7 +438,7 @@ func TestBatchAuthorize_MultipleRequests(t *testing.T) {
 		{Resource: "budget_report", Action: "read"},
 	}
 
-	responses, err := service.BatchAuthorize(context.Background(), 1, requests)
+	responses, err := svc.BatchAuthorize(context.Background(), 1, requests)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -480,14 +481,14 @@ func TestAuthorize_AuditLogCalled(t *testing.T) {
 		},
 	}
 
-	service := NewAuthorizationService(mockRepo)
+	svc := service.NewAuthorizationService(mockRepo)
 	req := model.AuthorizeRequest{
 		UserID:   1,
 		Resource: "employee_records",
 		Action:   "read",
 	}
 
-	resp, err := service.Authorize(context.Background(), req)
+	resp, err := svc.Authorize(context.Background(), req)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)

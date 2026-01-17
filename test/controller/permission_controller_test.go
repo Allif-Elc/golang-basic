@@ -1,12 +1,13 @@
-package controller
+package controller_test
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"golang-basic/internal/model"
-	"golang-basic/internal/service"
+	"golang-basic/api/internal/controller"
+	"golang-basic/api/internal/model"
+	"golang-basic/api/internal/service"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -125,7 +126,7 @@ func (m *MockPermissionService) DeletePermission(ctx context.Context, id int64) 
 
 func TestCreateAttribute_Success(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	reqBody := model.CreateAttributesRequest{
 		Name:        "test_role",
@@ -136,7 +137,7 @@ func TestCreateAttribute_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/attributes", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreateAttribute(w, req)
+	ctrl.CreateAttribute(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("Expected status code %d, got %d", http.StatusCreated, w.Code)
@@ -160,11 +161,11 @@ func TestListAttributes_Success(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 	req := httptest.NewRequest(http.MethodGet, "/attributes", nil)
 	w := httptest.NewRecorder()
 
-	controller.ListAttributes(w, req)
+	ctrl.ListAttributes(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -180,12 +181,12 @@ func TestListAttributes_Success(t *testing.T) {
 
 func TestGetAttributeByID_Success(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/attributes/1", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetAttributeByID(w, req)
+	ctrl.GetAttributeByID(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -194,12 +195,12 @@ func TestGetAttributeByID_Success(t *testing.T) {
 
 func TestDeleteAttribute_Success(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodDelete, "/attributes/1", nil)
 	w := httptest.NewRecorder()
 
-	controller.DeleteAttribute(w, req)
+	ctrl.DeleteAttribute(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -210,12 +211,12 @@ func TestDeleteAttribute_Success(t *testing.T) {
 
 func TestCreateAttribute_InvalidMethod(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/attributes", nil)
 	w := httptest.NewRecorder()
 
-	controller.CreateAttribute(w, req)
+	ctrl.CreateAttribute(w, req)
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
@@ -224,12 +225,12 @@ func TestCreateAttribute_InvalidMethod(t *testing.T) {
 
 func TestCreateAttribute_InvalidRequestBody(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodPost, "/attributes", bytes.NewBuffer([]byte("invalid json")))
 	w := httptest.NewRecorder()
 
-	controller.CreateAttribute(w, req)
+	ctrl.CreateAttribute(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -250,7 +251,7 @@ func TestCreateAttribute_ValidationError_EmptyName(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	reqBody := model.CreateAttributesRequest{
 		Name:        "",
@@ -261,7 +262,7 @@ func TestCreateAttribute_ValidationError_EmptyName(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/attributes", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreateAttribute(w, req)
+	ctrl.CreateAttribute(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -275,7 +276,7 @@ func TestCreateAttribute_ValidationError_SpecialCharacters(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	reqBody := model.CreateAttributesRequest{
 		Name:        "test@role!",
@@ -286,7 +287,7 @@ func TestCreateAttribute_ValidationError_SpecialCharacters(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/attributes", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreateAttribute(w, req)
+	ctrl.CreateAttribute(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -300,7 +301,7 @@ func TestCreateAttribute_SQLInjectionAttempt(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	reqBody := model.CreateAttributesRequest{
 		Name:        "role'; DROP TABLE attributes; --",
@@ -311,7 +312,7 @@ func TestCreateAttribute_SQLInjectionAttempt(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/attributes", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreateAttribute(w, req)
+	ctrl.CreateAttribute(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -325,7 +326,7 @@ func TestCreateAttribute_DuplicateName(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	reqBody := model.CreateAttributesRequest{
 		Name:        "role",
@@ -336,7 +337,7 @@ func TestCreateAttribute_DuplicateName(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/attributes", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreateAttribute(w, req)
+	ctrl.CreateAttribute(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -345,12 +346,12 @@ func TestCreateAttribute_DuplicateName(t *testing.T) {
 
 func TestGetAttributeByID_InvalidID(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/attributes/invalid", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetAttributeByID(w, req)
+	ctrl.GetAttributeByID(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -371,11 +372,11 @@ func TestGetAttributeByID_NotFound(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 	req := httptest.NewRequest(http.MethodGet, "/attributes/999", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetAttributeByID(w, req)
+	ctrl.GetAttributeByID(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("Expected status code %d, got %d", http.StatusNotFound, w.Code)
@@ -384,12 +385,12 @@ func TestGetAttributeByID_NotFound(t *testing.T) {
 
 func TestGetAttributeByID_InvalidMethod(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodPost, "/attributes/1", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetAttributeByID(w, req)
+	ctrl.GetAttributeByID(w, req)
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
@@ -398,12 +399,12 @@ func TestGetAttributeByID_InvalidMethod(t *testing.T) {
 
 func TestDeleteAttribute_InvalidID(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodDelete, "/attributes/abc", nil)
 	w := httptest.NewRecorder()
 
-	controller.DeleteAttribute(w, req)
+	ctrl.DeleteAttribute(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -417,11 +418,11 @@ func TestDeleteAttribute_NotFound(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 	req := httptest.NewRequest(http.MethodDelete, "/attributes/999", nil)
 	w := httptest.NewRecorder()
 
-	controller.DeleteAttribute(w, req)
+	ctrl.DeleteAttribute(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -432,7 +433,7 @@ func TestDeleteAttribute_NotFound(t *testing.T) {
 
 func TestCreateResource_Success(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	reqBody := model.CreateResoucesRequest{
 		Name:        "employee_records",
@@ -443,7 +444,7 @@ func TestCreateResource_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/resources", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreateResource(w, req)
+	ctrl.CreateResource(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("Expected status code %d, got %d", http.StatusCreated, w.Code)
@@ -460,11 +461,11 @@ func TestListResources_Success(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 	req := httptest.NewRequest(http.MethodGet, "/resources", nil)
 	w := httptest.NewRecorder()
 
-	controller.ListResources(w, req)
+	ctrl.ListResources(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -473,12 +474,12 @@ func TestListResources_Success(t *testing.T) {
 
 func TestGetResourceByID_Success(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/resources/1", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetResourceByID(w, req)
+	ctrl.GetResourceByID(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -487,12 +488,12 @@ func TestGetResourceByID_Success(t *testing.T) {
 
 func TestDeleteResource_Success(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodDelete, "/resources/1", nil)
 	w := httptest.NewRecorder()
 
-	controller.DeleteResource(w, req)
+	ctrl.DeleteResource(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -503,12 +504,12 @@ func TestDeleteResource_Success(t *testing.T) {
 
 func TestCreateResource_InvalidRequestBody(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodPost, "/resources", bytes.NewBuffer([]byte("{invalid}")))
 	w := httptest.NewRecorder()
 
-	controller.CreateResource(w, req)
+	ctrl.CreateResource(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -522,7 +523,7 @@ func TestCreateResource_NameTooLong(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	longName := string(make([]byte, 101))
 	for i := range longName {
@@ -538,7 +539,7 @@ func TestCreateResource_NameTooLong(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/resources", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreateResource(w, req)
+	ctrl.CreateResource(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -547,12 +548,12 @@ func TestCreateResource_NameTooLong(t *testing.T) {
 
 func TestGetResourceByID_InvalidID(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/resources/not-a-number", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetResourceByID(w, req)
+	ctrl.GetResourceByID(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -566,11 +567,11 @@ func TestDeleteResource_NotFound(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 	req := httptest.NewRequest(http.MethodDelete, "/resources/999", nil)
 	w := httptest.NewRecorder()
 
-	controller.DeleteResource(w, req)
+	ctrl.DeleteResource(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -581,7 +582,7 @@ func TestDeleteResource_NotFound(t *testing.T) {
 
 func TestCreatePermission_Success(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	reqBody := model.CreatePermissionsRequest{
 		Name:        "read_employee_records",
@@ -592,7 +593,7 @@ func TestCreatePermission_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/permissions", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreatePermission(w, req)
+	ctrl.CreatePermission(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("Expected status code %d, got %d", http.StatusCreated, w.Code)
@@ -617,11 +618,11 @@ func TestListPermissions_Success(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 	req := httptest.NewRequest(http.MethodGet, "/permissions", nil)
 	w := httptest.NewRecorder()
 
-	controller.ListPermissions(w, req)
+	ctrl.ListPermissions(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -637,12 +638,12 @@ func TestListPermissions_Success(t *testing.T) {
 
 func TestGetPermissionByID_Success(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/permissions/1", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetPermissionByID(w, req)
+	ctrl.GetPermissionByID(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -651,12 +652,12 @@ func TestGetPermissionByID_Success(t *testing.T) {
 
 func TestDeletePermission_Success(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodDelete, "/permissions/1", nil)
 	w := httptest.NewRecorder()
 
-	controller.DeletePermission(w, req)
+	ctrl.DeletePermission(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
@@ -674,12 +675,12 @@ func TestDeletePermission_Success(t *testing.T) {
 
 func TestCreatePermission_InvalidMethod(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/permissions", nil)
 	w := httptest.NewRecorder()
 
-	controller.CreatePermission(w, req)
+	ctrl.CreatePermission(w, req)
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
@@ -693,7 +694,7 @@ func TestCreatePermission_MissingName(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	reqBody := model.CreatePermissionsRequest{
 		Name:        "",
@@ -704,7 +705,7 @@ func TestCreatePermission_MissingName(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/permissions", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreatePermission(w, req)
+	ctrl.CreatePermission(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -718,7 +719,7 @@ func TestCreatePermission_InvalidCharacters(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	reqBody := model.CreatePermissionsRequest{
 		Name:        "permission with spaces!",
@@ -729,7 +730,7 @@ func TestCreatePermission_InvalidCharacters(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/permissions", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreatePermission(w, req)
+	ctrl.CreatePermission(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -743,7 +744,7 @@ func TestCreatePermission_DuplicateName(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	reqBody := model.CreatePermissionsRequest{
 		Name:        "read",
@@ -754,7 +755,7 @@ func TestCreatePermission_DuplicateName(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/permissions", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	controller.CreatePermission(w, req)
+	ctrl.CreatePermission(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -763,12 +764,12 @@ func TestCreatePermission_DuplicateName(t *testing.T) {
 
 func TestGetPermissionByID_InvalidID(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/permissions/abc123", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetPermissionByID(w, req)
+	ctrl.GetPermissionByID(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -789,11 +790,11 @@ func TestGetPermissionByID_NotFound(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 	req := httptest.NewRequest(http.MethodGet, "/permissions/999", nil)
 	w := httptest.NewRecorder()
 
-	controller.GetPermissionByID(w, req)
+	ctrl.GetPermissionByID(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("Expected status code %d, got %d", http.StatusNotFound, w.Code)
@@ -809,12 +810,12 @@ func TestGetPermissionByID_NotFound(t *testing.T) {
 
 func TestDeletePermission_InvalidID(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodDelete, "/permissions/invalid-id", nil)
 	w := httptest.NewRecorder()
 
-	controller.DeletePermission(w, req)
+	ctrl.DeletePermission(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -828,11 +829,11 @@ func TestDeletePermission_NotFound(t *testing.T) {
 		},
 	}
 
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 	req := httptest.NewRequest(http.MethodDelete, "/permissions/999", nil)
 	w := httptest.NewRecorder()
 
-	controller.DeletePermission(w, req)
+	ctrl.DeletePermission(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
@@ -841,12 +842,12 @@ func TestDeletePermission_NotFound(t *testing.T) {
 
 func TestListPermissions_InvalidMethod(t *testing.T) {
 	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
+	ctrl := controller.NewPermissionController(mockService)
 
 	req := httptest.NewRequest(http.MethodPost, "/permissions", nil)
 	w := httptest.NewRecorder()
 
-	controller.ListPermissions(w, req)
+	ctrl.ListPermissions(w, req)
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
@@ -855,76 +856,3 @@ func TestListPermissions_InvalidMethod(t *testing.T) {
 
 // ==================== ROUTE HANDLER TESTS ====================
 
-func TestHandlePermissionRoutes_CreateAttribute(t *testing.T) {
-	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
-
-	reqBody := model.CreateAttributesRequest{Name: "test_role"}
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/attributes", bytes.NewBuffer(body))
-	w := httptest.NewRecorder()
-
-	controller.HandlePermissionRoutes(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Errorf("Expected status code %d, got %d", http.StatusCreated, w.Code)
-	}
-}
-
-func TestHandlePermissionRoutes_ListResources(t *testing.T) {
-	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
-
-	req := httptest.NewRequest(http.MethodGet, "/resources", nil)
-	w := httptest.NewRecorder()
-
-	controller.HandlePermissionRoutes(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
-	}
-}
-
-func TestHandlePermissionRoutes_CreatePermission(t *testing.T) {
-	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
-
-	reqBody := model.CreatePermissionsRequest{Name: "test_permission"}
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/permissions", bytes.NewBuffer(body))
-	w := httptest.NewRecorder()
-
-	controller.HandlePermissionRoutes(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Errorf("Expected status code %d, got %d", http.StatusCreated, w.Code)
-	}
-}
-
-func TestHandlePermissionRoutes_InvalidRoute(t *testing.T) {
-	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
-
-	req := httptest.NewRequest(http.MethodGet, "/invalid/route", nil)
-	w := httptest.NewRecorder()
-
-	controller.HandlePermissionRoutes(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("Expected status code %d, got %d", http.StatusNotFound, w.Code)
-	}
-}
-
-func TestHandlePermissionRoutes_MethodNotAllowed(t *testing.T) {
-	mockService := &MockPermissionService{}
-	controller := NewPermissionController(mockService)
-
-	req := httptest.NewRequest(http.MethodPut, "/attributes", nil)
-	w := httptest.NewRecorder()
-
-	controller.HandlePermissionRoutes(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
-	}
-}

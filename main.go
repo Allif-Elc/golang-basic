@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"golang-basic/internal/config"
-	"golang-basic/internal/routes"
+	"golang-basic/api/internal/config"
+	"golang-basic/api/internal/routes"
 	"log"
 	"net/http"
 )
@@ -16,9 +16,10 @@ func main() {
 		defer config.CloseDatabase()
 	}
 
-	routes.SetupRoutes()
+	// Setup Chi router
+	r := routes.SetupRoutes()
 
 	port := ":3003"
 	fmt.Printf("Server is running on HTTPS port %s\n", port)
-	log.Fatal(http.ListenAndServeTLS(port, "server.crt", "server.key", nil))
+	log.Fatal(http.ListenAndServeTLS(port, "server.crt", "server.key", r))
 }
