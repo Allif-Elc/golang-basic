@@ -2,18 +2,19 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"golang-basic/api/internal/model"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type AuthorizationRepository struct {
-	db *sql.DB
+	db *pgxpool.Pool
 }
 
-func NewAuthorizationRepository(db *sql.DB) *AuthorizationRepository {
+func NewAuthorizationRepository(db *pgxpool.Pool) *AuthorizationRepository {
 	return &AuthorizationRepository{db: db}
 }
 
@@ -25,7 +26,7 @@ func (r *AuthorizationRepository) GetUserRoles(ctx context.Context, userID int64
 		WHERE ua.id_user = $1 AND a.name = 'role'
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, userID)
+	rows, err := r.db.Query(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user roles: %w", err)
 	}
@@ -58,7 +59,7 @@ func (r *AuthorizationRepository) GetMatchingPolicies(ctx context.Context, resou
 		  AND policy_rule->>'action' = $2
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, resource, action)
+	rows, err := r.db.Query(ctx, query, resource, action)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query policies: %w", err)
 	}
@@ -93,7 +94,7 @@ func (r *AuthorizationRepository) LogAuditDecision(
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
-	_, err := r.db.ExecContext(ctx, query, userID, resource, action, allowed, reason, time.Now())
+	_, err := r.db.Exec(ctx, query, userID, resource, action, allowed, reason, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to log audit: %w", err)
 	}
@@ -110,39 +111,10 @@ func ParsePolicyRule(data []byte) (*model.PolicyRule, error) {
 	return &rule, nil
 }
 
-// PrepareStatements prepares frequently used queries for better performance
+// PrepareStatements is a no-op for pgxpool as it handles statement preparation internally
+// This method is kept for compatibility but does nothing
 func (r *AuthorizationRepository) PrepareStatements(ctx context.Context) error {
-	// Prepare user roles query
-	_, err := r.db.PrepareContext(ctx, `
-		SELECT ua.value
-		FROM user_attributes ua
-		INNER JOIN attributes a ON ua.id_attribute = a.id_user_attribute
-		WHERE ua.id_user = $1 AND a.name = 'role'
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare user roles statement: %w", err)
-	}
-
-	// Prepare policies query
-	_, err = r.db.PrepareContext(ctx, `
-		SELECT policy_id, name, policy_rule, is_active, created_at, updated_at
-		FROM policies
-		WHERE is_active = true
-		  AND policy_rule->>'resource' = $1
-		  AND policy_rule->>'action' = $2
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare policies statement: %w", err)
-	}
-
-	// Prepare audit log insert
-	_, err = r.db.PrepareContext(ctx, `
-		INSERT INTO audit_logs (id_user, resource, action, allowed, reason, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare audit statement: %w", err)
-	}
-
+	// pgxpool handles statement preparation internally
+	// This method is kept for API compatibility but does nothing
 	return nil
 }

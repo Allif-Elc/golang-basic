@@ -18,19 +18,26 @@ func SetupRoutes() *chi.Mux {
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(config.DB)
 	profileRepo := repository.NewProfileRepository(config.DB)
-	// TODO: Fix authorization repository type mismatch (expects *sql.DB, config.DB is *pgxpool.Pool)
-	// authorizationRepo := repository.NewAuthorizationRepository(config.DB)
-	// authorizationService := service.NewAuthorizationService(authorizationRepo)
-	// authMiddleware := appmiddleware.NewAuthorizationMiddleware(authorizationService)
+	authorizationRepo := repository.NewAuthorizationRepository(config.DB)
 
 	// Initialize services
 	userService := service.NewUserService(userRepo)
 	profileService := service.NewProfileService(profileRepo, userRepo)
+	authorizationService := service.NewAuthorizationService(authorizationRepo)
+	projectService := service.NewProjectService(nil)
+
+	// Initialize repositories
+	projectRepo := repository.NewProjectRepository(config.DB)
+	projectService = service.NewProjectService(projectRepo)
 
 	// Initialize controllers
 	userController := controller.NewUserController(userService)
 	profileController := controller.NewProfileController(profileService)
 	permissionController := controller.NewPermissionController(nil) // TODO: Add permission service when implemented
+	projectController := controller.NewProjectController(projectService)
+
+	// Initialize authorization middleware
+	authMiddleware := appmiddleware.NewAuthorizationMiddleware(authorizationService)
 
 	// Create Chi router
 	r := chi.NewRouter()
@@ -81,6 +88,18 @@ func SetupRoutes() *chi.Mux {
 				r.Get("/", profileController.GetProfileByID)
 				r.Put("/", profileController.UpdateProfile)
 				r.Delete("/", profileController.DeleteProfile)
+			})
+		})
+
+		// ----- PROJECTS -----
+		r.Route("/projects", func(r chi.Router) {
+			r.Get("/", projectController.ListProjects)
+			r.With(authMiddleware.RequirePermission("projects", "write")).Post("/", projectController.CreateProject)
+
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", projectController.GetProjectByID)
+				r.With(authMiddleware.RequirePermission("projects", "write")).Put("/", projectController.UpdateProject)
+				r.With(authMiddleware.RequirePermission("projects", "delete")).Delete("/", projectController.DeleteProject)
 			})
 		})
 
