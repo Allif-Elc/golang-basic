@@ -19,22 +19,22 @@ func SetupRoutes() *chi.Mux {
 	userRepo := repository.NewUserRepository(config.DB)
 	profileRepo := repository.NewProfileRepository(config.DB)
 	authorizationRepo := repository.NewAuthorizationRepository(config.DB)
+	projectRepo := repository.NewProjectRepository(config.DB)
+	restAPIRepo := repository.NewRestAPIRepository(config.DB)
 
 	// Initialize services
 	userService := service.NewUserService(userRepo)
 	profileService := service.NewProfileService(profileRepo, userRepo)
 	authorizationService := service.NewAuthorizationService(authorizationRepo)
-	projectService := service.NewProjectService(nil)
-
-	// Initialize repositories
-	projectRepo := repository.NewProjectRepository(config.DB)
-	projectService = service.NewProjectService(projectRepo)
+	projectService := service.NewProjectService(projectRepo)
+	restAPIService := service.NewRestAPIService(restAPIRepo, projectRepo)
 
 	// Initialize controllers
 	userController := controller.NewUserController(userService)
 	profileController := controller.NewProfileController(profileService)
 	permissionController := controller.NewPermissionController(nil) // TODO: Add permission service when implemented
 	projectController := controller.NewProjectController(projectService)
+	restAPIController := controller.NewRestAPIController(restAPIService)
 
 	// Initialize authorization middleware
 	authMiddleware := appmiddleware.NewAuthorizationMiddleware(authorizationService)
@@ -43,20 +43,21 @@ func SetupRoutes() *chi.Mux {
 	r := chi.NewRouter()
 
 	// ========== GLOBAL MIDDLEWARE ==========
-	r.Use(appmiddleware.RequestLogger) // Custom logger from common.go
-	r.Use(middleware.Recoverer)        // Built-in panic recovery
-
-	// CORS middleware
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(appmiddleware.RequestLogger)
+	r.Use(middleware.Heartbeat("/ping"))
+	r.Use(middleware.Compress(5))
+	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:3000"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-User-ID"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
-		MaxAge:           300, // 5 minutes
+		MaxAge:           300,
 	}))
-
-	r.Use(appmiddleware.SetUserIDInContext()) // Extract user ID from header to context
+	r.Use(appmiddleware.SetUserIDInContext())
 
 	// ========== HEALTH CHECK ==========
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +101,23 @@ func SetupRoutes() *chi.Mux {
 				r.Get("/", projectController.GetProjectByID)
 				r.With(authMiddleware.RequirePermission("projects", "write")).Put("/", projectController.UpdateProject)
 				r.With(authMiddleware.RequirePermission("projects", "delete")).Delete("/", projectController.DeleteProject)
+			})
+
+			// REST APIs nested under projects
+			r.Route("/{projectID}/rest-apis", func(r chi.Router) {
+				r.With(authMiddleware.RequirePermission("api_docs_rest_api", "create")).Post("/", restAPIController.CreateRestAPI)
+				r.With(authMiddleware.RequirePermission("api_docs_rest_api", "read")).Get("/", restAPIController.ListRestAPIsByProject)
+			})
+		})
+
+		// ----- REST APIs -----
+		r.Route("/rest-apis", func(r chi.Router) {
+			r.With(authMiddleware.RequirePermission("api_docs_rest_api", "read")).Get("/", restAPIController.ListRestAPIs)
+
+			r.Route("/{id}", func(r chi.Router) {
+				r.With(authMiddleware.RequirePermission("api_docs_rest_api", "read")).Get("/", restAPIController.GetRestAPIByID)
+				r.With(authMiddleware.RequirePermission("api_docs_rest_api", "update")).Put("/", restAPIController.UpdateRestAPI)
+				r.With(authMiddleware.RequirePermission("api_docs_rest_api", "delete")).Delete("/", restAPIController.DeleteRestAPI)
 			})
 		})
 
