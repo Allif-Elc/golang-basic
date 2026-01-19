@@ -168,6 +168,12 @@ func (r *ProjectRepository) Delete(ctx context.Context, projectID int64) error {
 }
 
 // FindAll retrieves all projects with pagination and filters
+// Required indexes:
+//   CREATE INDEX idx_projects_user ON projects(id_user);
+//   CREATE INDEX idx_projects_is_public ON projects(is_public);
+//   CREATE INDEX idx_projects_name ON projects USING GIN (to_tsvector('english', name));
+//   CREATE INDEX idx_projects_description ON projects USING GIN (to_tsvector('english', description));
+//   CREATE INDEX idx_projects_created_at ON projects(created_at);
 func (r *ProjectRepository) FindAll(ctx context.Context, req model.ListProjectsRequest) (*model.PageResult[model.Project], error) {
 	// Validate pagination parameters
 	if req.Page < 1 {
@@ -180,32 +186,33 @@ func (r *ProjectRepository) FindAll(ctx context.Context, req model.ListProjectsR
 	// Calculate offset
 	offset := (req.Page - 1) * req.Limit
 
-	// Build WHERE clause dynamically
-	whereClause := "WHERE 1=1"
+	var whereBuilder strings.Builder
+	whereBuilder.WriteString("WHERE 1=1")
 	args := []interface{}{}
 	argNum := 1
 
 	if req.IDUser != nil {
-		whereClause += fmt.Sprintf(" AND id_user = $%d", argNum)
+		whereBuilder.WriteString(fmt.Sprintf(" AND id_user = $%d", argNum))
 		args = append(args, *req.IDUser)
 		argNum++
 	}
 
 	if req.IsPublic != nil {
-		whereClause += fmt.Sprintf(" AND is_public = $%d", argNum)
+		whereBuilder.WriteString(fmt.Sprintf(" AND is_public = $%d", argNum))
 		args = append(args, *req.IsPublic)
 		argNum++
 	}
 
 	if req.Search != "" {
-		whereClause += fmt.Sprintf(" AND (name ILIKE $%d OR description ILIKE $%d)", argNum, argNum+1)
+		whereBuilder.WriteString(fmt.Sprintf(" AND (name ILIKE $%d OR description ILIKE $%d)", argNum, argNum+1))
 		searchPattern := "%" + req.Search + "%"
 		args = append(args, searchPattern, searchPattern)
 		argNum += 2
 	}
+	whereClause := whereBuilder.String()
 
-	// Build ORDER BY clause
-	orderBy := "created_at DESC"
+	var orderByBuilder strings.Builder
+	orderByBuilder.WriteString("created_at")
 	if req.SortBy != "" {
 		validSortFields := map[string]string{
 			"name":       "name",
@@ -213,14 +220,17 @@ func (r *ProjectRepository) FindAll(ctx context.Context, req model.ListProjectsR
 			"updated_at": "updated_at",
 		}
 		if field, ok := validSortFields[req.SortBy]; ok {
-			orderBy = field
+			orderByBuilder.Reset()
+			orderByBuilder.WriteString(field)
 			if req.SortOrder == "asc" || req.SortOrder == "desc" {
-				orderBy += " " + strings.ToUpper(req.SortOrder)
+				orderByBuilder.WriteString(" ")
+				orderByBuilder.WriteString(strings.ToUpper(req.SortOrder))
 			} else {
-				orderBy += " DESC"
+				orderByBuilder.WriteString(" DESC")
 			}
 		}
 	}
+	orderBy := orderByBuilder.String()
 
 	// Main query
 	query := fmt.Sprintf(`
