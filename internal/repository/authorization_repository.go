@@ -19,6 +19,11 @@ func NewAuthorizationRepository(db *pgxpool.Pool) *AuthorizationRepository {
 }
 
 func (r *AuthorizationRepository) GetUserRoles(ctx context.Context, userID int64) ([]string, error) {
+	// Required indexes:
+	//   CREATE INDEX idx_user_attributes_user ON user_attributes(id_user);
+	//   CREATE INDEX idx_user_attributes_attribute ON user_attributes(id_attribute);
+	//   CREATE INDEX idx_attributes_id ON attributes(id_user_attribute);
+	//   CREATE INDEX idx_attributes_name ON attributes(name);
 	query := `
 		SELECT ua.value
 		FROM user_attributes ua
@@ -49,7 +54,10 @@ func (r *AuthorizationRepository) GetUserRoles(ctx context.Context, userID int64
 }
 
 // GetMatchingPolicies fetches policies that match the resource and action
-// Uses GIN index on policy_rule JSONB for efficient JSON queries
+// Required indexes:
+//   CREATE INDEX idx_policies_is_active ON policies(is_active);
+//   CREATE INDEX idx_policies_rule_resource ON policies USING GIN ((policy_rule->>'resource'));
+//   CREATE INDEX idx_policies_rule_action ON policies USING GIN ((policy_rule->>'action'));
 func (r *AuthorizationRepository) GetMatchingPolicies(ctx context.Context, resource, action string) ([]model.Policy, error) {
 	query := `
 		SELECT policy_id, name, policy_rule, is_active, created_at, updated_at
@@ -82,6 +90,11 @@ func (r *AuthorizationRepository) GetMatchingPolicies(ctx context.Context, resou
 }
 
 // LogAuditDecision records authorization decision for compliance
+// Required indexes:
+//   CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
+//   CREATE INDEX idx_audit_logs_resource ON audit_logs(resource);
+//   CREATE INDEX idx_audit_logs_action ON audit_logs(action);
+//   CREATE INDEX idx_audit_logs_created ON audit_logs(created_at);
 func (r *AuthorizationRepository) LogAuditDecision(
 	ctx context.Context,
 	userID int64,

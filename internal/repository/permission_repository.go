@@ -72,6 +72,8 @@ func (r *PermissionRepository) GetAttributeByID(ctx context.Context, id int64) (
 }
 
 // GetAttributeByName retrieves an attribute by its name
+// Required indexes:
+//   CREATE UNIQUE INDEX idx_attributes_name ON attributes(name);
 func (r *PermissionRepository) GetAttributeByName(ctx context.Context, name string) (*model.Attributes, error) {
 	query := `SELECT id_attribute, name, description, created_at FROM attributes WHERE name = $1`
 	var attribute model.Attributes
@@ -88,6 +90,8 @@ func (r *PermissionRepository) GetAttributeByName(ctx context.Context, name stri
 }
 
 // ListAttributes retrieves all attributes
+// Required indexes:
+//   CREATE INDEX idx_attributes_id ON attributes(id_attribute);
 func (r *PermissionRepository) ListAttributes(ctx context.Context) ([]model.Attributes, error) {
 	query := `SELECT id_attribute, name, description, created_at FROM attributes ORDER BY id_attribute`
 	rows, err := r.db.Query(ctx, query)
@@ -147,6 +151,8 @@ func (r *PermissionRepository) GetResourceByID(ctx context.Context, id int64) (*
 }
 
 // GetResourceByName retrieves a resource by its name
+// Required indexes:
+//   CREATE UNIQUE INDEX idx_resources_name ON resources(name);
 func (r *PermissionRepository) GetResourceByName(ctx context.Context, name string) (*model.Resources, error) {
 	query := `SELECT id_resource, name, description, created_at FROM resources WHERE name = $1`
 	var resource model.Resources
@@ -163,6 +169,8 @@ func (r *PermissionRepository) GetResourceByName(ctx context.Context, name strin
 }
 
 // ListResources retrieves all resources
+// Required indexes:
+//   CREATE INDEX idx_resources_id ON resources(id_resource);
 func (r *PermissionRepository) ListResources(ctx context.Context) ([]model.Resources, error) {
 	query := `SELECT id_resource, name, description, created_at FROM resources ORDER BY id_resource`
 	rows, err := r.db.Query(ctx, query)
@@ -222,6 +230,8 @@ func (r *PermissionRepository) GetPermissionByID(ctx context.Context, id int64) 
 }
 
 // GetPermissionByName retrieves a permission by its name
+// Required indexes:
+//   CREATE UNIQUE INDEX idx_permissions_name ON permissions(name);
 func (r *PermissionRepository) GetPermissionByName(ctx context.Context, name string) (*model.Permissions, error) {
 	query := `SELECT id_permission, name, description, created_at FROM permissions WHERE name = $1`
 	var permission model.Permissions
@@ -238,6 +248,8 @@ func (r *PermissionRepository) GetPermissionByName(ctx context.Context, name str
 }
 
 // ListPermissions retrieves all permissions
+// Required indexes:
+//   CREATE INDEX idx_permissions_id ON permissions(id_permission);
 func (r *PermissionRepository) ListPermissions(ctx context.Context) ([]model.Permissions, error) {
 	query := `SELECT id_permission, name, description, created_at FROM permissions ORDER BY id_permission`
 	rows, err := r.db.Query(ctx, query)
