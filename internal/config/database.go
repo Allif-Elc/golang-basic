@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -16,6 +18,11 @@ type DatabaseConfig struct {
 	Password string
 	DBName   string
 }
+
+const (
+	QueryTimeout       = 5 * time.Second
+	SlowQueryThreshold = 50 * time.Millisecond
+)
 
 var DB *pgxpool.Pool
 
@@ -41,6 +48,12 @@ func InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("unable to parse connection string: %w", err)
 	}
+
+	poolConfig.MaxConns = int32(runtime.NumCPU() * 4)
+	poolConfig.MinConns = int32(runtime.NumCPU())
+	poolConfig.MaxConnLifetime = time.Hour
+	poolConfig.MaxConnIdleTime = 10 * time.Minute
+	poolConfig.HealthCheckPeriod = time.Minute
 
 	DB, err = pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
