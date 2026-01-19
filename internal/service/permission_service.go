@@ -176,7 +176,7 @@ func (s *PermissionService) ListAttributes(ctx context.Context) ([]model.Attribu
 // DeleteAttribute deletes an attribute by ID with validation
 func (s *PermissionService) DeleteAttribute(ctx context.Context, id int64) error {
 	if err := s.validateID(id, "id"); err != nil {
-		return err
+		return fmt.Errorf("invalid ID: %w", err)
 	}
 
 	err := s.repo.DeleteAttribute(ctx, id)
@@ -242,7 +242,7 @@ func (s *PermissionService) ListResources(ctx context.Context) ([]model.Resource
 // DeleteResource deletes a resource by ID with validation
 func (s *PermissionService) DeleteResource(ctx context.Context, id int64) error {
 	if err := s.validateID(id, "id"); err != nil {
-		return err
+		return fmt.Errorf("invalid ID: %w", err)
 	}
 
 	err := s.repo.DeleteResource(ctx, id)
@@ -308,7 +308,7 @@ func (s *PermissionService) ListPermissions(ctx context.Context) ([]model.Permis
 // DeletePermission deletes a permission by ID with validation
 func (s *PermissionService) DeletePermission(ctx context.Context, id int64) error {
 	if err := s.validateID(id, "id"); err != nil {
-		return err
+		return fmt.Errorf("invalid ID: %w", err)
 	}
 
 	err := s.repo.DeletePermission(ctx, id)

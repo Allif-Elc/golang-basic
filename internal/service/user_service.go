@@ -79,7 +79,7 @@ func (s *UserService) UpdateUser(ctx context.Context, req model.UpdateUserReques
 	}
 
 	if err := s.validateUserInput(user); err != nil {
-		return err
+		return fmt.Errorf("failed to validate user input: %w", err)
 	}
 
 	updated := s.repo.Update(ctx, req)
