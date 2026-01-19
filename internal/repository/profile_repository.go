@@ -33,44 +33,23 @@ func (r *ProfileRepository) Create(ctx context.Context, profile *model.CreatePro
 }
 func (r *ProfileRepository) FindByID(ctx context.Context, profileID int64) (model.Profile, error) {
 	query := `SELECT id_profile, user_id, age, gender, bio, phone_number, website, created_at, updated_at FROM profiles WHERE id_profile = $1`
-	row, err := r.db.Query(ctx, query, profileID)
+	var profile model.Profile
+	err := r.db.QueryRow(ctx, query, profileID).Scan(&profile.ProfileId, &profile.UserID, &profile.Age, &profile.Gender, &profile.Bio, &profile.PhoneNumber, &profile.Website, &profile.CreateAt, &profile.UpdateAt)
 	if err != nil {
 		return model.Profile{}, err
-	}
-	defer row.Close()
-
-	var profile model.Profile
-	if row.Next() {
-		err = row.Scan(&profile.ProfileId, &profile.UserID, &profile.Age, &profile.Gender, &profile.Bio, &profile.PhoneNumber, &profile.Website, &profile.CreateAt, &profile.UpdateAt)
-		if err != nil {
-			return model.Profile{}, err
-		}
 	}
 	return profile, nil
 }
 
 func (r *ProfileRepository) Update(ctx context.Context, profile model.UpdateProfileRequest) error {
-	queryExist := `SELECT id_profile FROM profiles WHERE id_profile = $1`
-	row, err := r.db.Query(ctx, queryExist, profile.ProfileId)
-	if err != nil {
-		return err
-	}
-	defer row.Close()
-
-	var existingProfile model.Profile
-	if row.Next() {
-		err = row.Scan(&existingProfile.ProfileId)
-		if err != nil {
-			return err
-		}
-	}
-
 	query := `UPDATE profiles SET age = $1, gender = $2, bio = $3, phone_number = $4, website = $5, updated_at = NOW() WHERE id_profile = $6`
-	_, err = r.db.Exec(ctx, query, profile.Age, profile.Gender, profile.Bio, profile.PhoneNumber, profile.Website, profile.ProfileId)
+	_, err := r.db.Exec(ctx, query, profile.Age, profile.Gender, profile.Bio, profile.PhoneNumber, profile.Website, profile.ProfileId)
 	return err
 }
 
 func (r *ProfileRepository) FindAll(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.Profile], error) {
+	// Required indexes:
+	//   CREATE INDEX idx_profiles_id ON profiles(id_profile);
 	switch req.Size {
 	case 5, 10, 25, 50, 100:
 	default:
@@ -115,6 +94,10 @@ func (r *ProfileRepository) FindAll(ctx context.Context, req model.PageRequest, 
 }
 
 func (r *ProfileRepository) FindAllWithUsers(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.Profile], error) {
+	// Required indexes:
+	//   CREATE INDEX idx_profiles_user_id ON profiles(user_id);
+	//   CREATE INDEX idx_users_id ON users(id_user);
+	//   CREATE INDEX idx_profiles_id ON profiles(id_profile);
 	switch req.Size {
 	case 5, 10, 25, 50, 100:
 	default:
