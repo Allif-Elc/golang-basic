@@ -21,34 +21,43 @@ func SetupRoutes() *chi.Mux {
 	authorizationRepo := repository.NewAuthorizationRepository(config.DB)
 	projectRepo := repository.NewProjectRepository(config.DB)
 	restAPIRepo := repository.NewRestAPIRepository(config.DB)
+	graphqlAPIRepo := repository.NewGraphQLAPIRepository(config.DB)
+	grpcAPIRepo := repository.NewGrpcAPIRepository(config.DB)
 
 	// Initialize services
+	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
 	profileService := service.NewProfileService(profileRepo, userRepo)
 	authorizationService := service.NewAuthorizationService(authorizationRepo)
 	projectService := service.NewProjectService(projectRepo)
 	restAPIService := service.NewRestAPIService(restAPIRepo, projectRepo)
+	graphqlAPIService := service.NewGraphQLAPIService(graphqlAPIRepo, projectRepo)
+	grpcAPIService := service.NewGrpcAPIService(grpcAPIRepo, projectRepo)
 
 	// Initialize controllers
+	authController := controller.NewAuthController(authService)
 	userController := controller.NewUserController(userService)
 	profileController := controller.NewProfileController(profileService)
-	permissionController := controller.NewPermissionController(nil) // TODO: Add permission service when implemented
+	permissionController := controller.NewPermissionController(nil)
 	projectController := controller.NewProjectController(projectService)
 	restAPIController := controller.NewRestAPIController(restAPIService)
+	graphqlAPIController := controller.NewGraphQLAPIController(graphqlAPIService)
+	grpcAPIController := controller.NewGrpcAPIController(grpcAPIService)
 
-	// Initialize authorization middleware
+	// Initialize middleware
+	jwtMiddleware := appmiddleware.NewJWTMiddleware()
 	authMiddleware := appmiddleware.NewAuthorizationMiddleware(authorizationService)
 
 	// Create Chi router
 	r := chi.NewRouter()
 
 	// ========== GLOBAL MIDDLEWARE ==========
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(appmiddleware.RequestLogger)
+	// Per Specs: Fast middleware first, I/O bound (logger) after
+	r.Use(middleware.RequestID) // 1st - Fast
+	r.Use(middleware.RealIP)    // 2nd - Fast
 	r.Use(middleware.Heartbeat("/ping"))
-	r.Use(middleware.Compress(5))
-	r.Use(middleware.Recoverer)
+	r.Use(middleware.Compress(5)) // Before auth
+	r.Use(middleware.Recoverer)   // Last
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:3000"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -57,7 +66,8 @@ func SetupRoutes() *chi.Mux {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-	r.Use(appmiddleware.SetUserIDInContext())
+	// Logger (I/O bound) placed after fast middleware per specs
+	r.Use(appmiddleware.RequestLogger)
 
 	// ========== HEALTH CHECK ==========
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -65,59 +75,100 @@ func SetupRoutes() *chi.Mux {
 		w.Write([]byte("OK"))
 	})
 
+	// ========== AUTH ROUTES (PUBLIC) ==========
+	r.Route("/api/v1/auth", func(r chi.Router) {
+		r.Post("/login", authController.Login)
+		r.Post("/register", authController.Register)
+		r.Post("/refresh", authController.RefreshToken)
+		r.With(jwtMiddleware.Authenticate()).Post("/logout", authController.Logout)
+	})
+
 	// ========== API v1 ROUTES ==========
 	r.Route("/api/v1", func(r chi.Router) {
 
 		// ----- USERS -----
 		r.Route("/users", func(r chi.Router) {
-			// TODO: Re-enable authorization middleware after fixing repository type mismatch
-			r.Get("/", userController.GetAllUsers)
+			r.With(jwtMiddleware.Authenticate()).Get("/", userController.GetAllUsers)
 			r.Post("/", userController.CreateUser)
 
 			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", userController.GetUserByID)
-				r.Put("/", userController.UpdateUser)
+				r.With(jwtMiddleware.Authenticate()).Get("/", userController.GetUserByID)
+				r.With(jwtMiddleware.Authenticate()).Put("/", userController.UpdateUser)
 			})
 		})
 
 		// ----- PROFILES -----
 		r.Route("/profiles", func(r chi.Router) {
-			r.Get("/", profileController.GetAllProfiles)
-			r.Post("/", profileController.CreateProfile)
+			r.With(jwtMiddleware.OptionalAuth()).Get("/", profileController.GetAllProfiles)
+			r.With(jwtMiddleware.Authenticate()).Post("/", profileController.CreateProfile)
 
 			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", profileController.GetProfileByID)
-				r.Put("/", profileController.UpdateProfile)
-				r.Delete("/", profileController.DeleteProfile)
+				r.With(jwtMiddleware.OptionalAuth()).Get("/", profileController.GetProfileByID)
+				r.With(jwtMiddleware.Authenticate()).Put("/", profileController.UpdateProfile)
+				r.With(jwtMiddleware.Authenticate()).Delete("/", profileController.DeleteProfile)
 			})
 		})
 
 		// ----- PROJECTS -----
 		r.Route("/projects", func(r chi.Router) {
-			r.Get("/", projectController.ListProjects)
-			r.With(authMiddleware.RequirePermission("projects", "write")).Post("/", projectController.CreateProject)
+			r.With(jwtMiddleware.OptionalAuth()).Get("/", projectController.ListProjects)
+			r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("projects", "write")).Post("/", projectController.CreateProject)
 
 			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", projectController.GetProjectByID)
-				r.With(authMiddleware.RequirePermission("projects", "write")).Put("/", projectController.UpdateProject)
-				r.With(authMiddleware.RequirePermission("projects", "delete")).Delete("/", projectController.DeleteProject)
+				r.With(jwtMiddleware.OptionalAuth()).Get("/", projectController.GetProjectByID)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("projects", "write")).Put("/", projectController.UpdateProject)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("projects", "delete")).Delete("/", projectController.DeleteProject)
 			})
 
 			// REST APIs nested under projects
 			r.Route("/{projectID}/rest-apis", func(r chi.Router) {
-				r.With(authMiddleware.RequirePermission("api_docs_rest_api", "create")).Post("/", restAPIController.CreateRestAPI)
-				r.With(authMiddleware.RequirePermission("api_docs_rest_api", "read")).Get("/", restAPIController.ListRestAPIsByProject)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_rest_api", "create")).Post("/", restAPIController.CreateRestAPI)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_rest_api", "read")).Get("/", restAPIController.ListRestAPIsByProject)
+			})
+
+			// GraphQL APIs nested under projects
+			r.Route("/{projectID}/graphql-apis", func(r chi.Router) {
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_graphql_api", "create")).Post("/", graphqlAPIController.CreateGraphQLAPI)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_graphql_api", "read")).Get("/", graphqlAPIController.ListGraphQLAPIsByProject)
+			})
+
+			// gRPC APIs nested under projects
+			r.Route("/{projectID}/grpc-apis", func(r chi.Router) {
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_grpc_api", "create")).Post("/", grpcAPIController.CreateGrpcAPI)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_grpc_api", "read")).Get("/", grpcAPIController.ListGrpcAPIsByProject)
 			})
 		})
 
 		// ----- REST APIs -----
 		r.Route("/rest-apis", func(r chi.Router) {
-			r.With(authMiddleware.RequirePermission("api_docs_rest_api", "read")).Get("/", restAPIController.ListRestAPIs)
+			r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_rest_api", "read")).Get("/", restAPIController.ListRestAPIs)
 
 			r.Route("/{id}", func(r chi.Router) {
-				r.With(authMiddleware.RequirePermission("api_docs_rest_api", "read")).Get("/", restAPIController.GetRestAPIByID)
-				r.With(authMiddleware.RequirePermission("api_docs_rest_api", "update")).Put("/", restAPIController.UpdateRestAPI)
-				r.With(authMiddleware.RequirePermission("api_docs_rest_api", "delete")).Delete("/", restAPIController.DeleteRestAPI)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_rest_api", "read")).Get("/", restAPIController.GetRestAPIByID)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_rest_api", "update")).Put("/", restAPIController.UpdateRestAPI)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_rest_api", "delete")).Delete("/", restAPIController.DeleteRestAPI)
+			})
+		})
+
+		// ----- GraphQL APIs -----
+		r.Route("/graphql-apis", func(r chi.Router) {
+			r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_graphql_api", "read")).Get("/", graphqlAPIController.ListGraphQLAPIs)
+
+			r.Route("/{id}", func(r chi.Router) {
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_graphql_api", "read")).Get("/", graphqlAPIController.GetGraphQLAPIByID)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_graphql_api", "update")).Put("/", graphqlAPIController.UpdateGraphQLAPI)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_graphql_api", "delete")).Delete("/", graphqlAPIController.DeleteGraphQLAPI)
+			})
+		})
+
+		// ----- gRPC APIs -----
+		r.Route("/grpc-apis", func(r chi.Router) {
+			r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_grpc_api", "read")).Get("/", grpcAPIController.ListGrpcAPIs)
+
+			r.Route("/{id}", func(r chi.Router) {
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_grpc_api", "read")).Get("/", grpcAPIController.GetGrpcAPIByID)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_grpc_api", "update")).Put("/", grpcAPIController.UpdateGrpcAPI)
+				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("api_docs_grpc_api", "delete")).Delete("/", grpcAPIController.DeleteGrpcAPI)
 			})
 		})
 
