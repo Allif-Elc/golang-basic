@@ -16,12 +16,12 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 }
 
 func (r *UserRepository) Create(ctx context.Context, user *model.CreateUserRequest) (*model.User, error) {
-	query := `INSERT into users (name, email, is_active) VALUES ($1, $2, TRUE) RETURNING id_user, created_at`
+	query := `INSERT into users (name, email, password_hash, is_active) VALUES ($1, $2, $3, TRUE) RETURNING id_user, created_at`
 	createdUser := model.User{
 		Name:  user.Name,
 		Email: user.Email,
 	}
-	err := r.db.QueryRow(ctx, query, user.Name, user.Email).Scan(&createdUser.UserId, &createdUser.CreateAt)
+	err := r.db.QueryRow(ctx, query, user.Name, user.Email, user.Password).Scan(&createdUser.UserId, &createdUser.CreateAt)
 	if err != nil {
 		return nil, err
 	}
@@ -29,14 +29,28 @@ func (r *UserRepository) Create(ctx context.Context, user *model.CreateUserReque
 }
 
 func (r *UserRepository) FindByID(ctx context.Context, userID int64) (model.User, error) {
-	query := `SELECT id_user, name, email, created_at, updated_at FROM users WHERE id_user = $1`
+	query := `SELECT id_user, name, email, password_hash, is_active, created_at, updated_at FROM users WHERE id_user = $1`
 	var user model.User
-	err := r.db.QueryRow(ctx, query, userID).Scan(&user.UserId, &user.Name, &user.Email, &user.CreateAt, &user.UpdateAt)
+	err := r.db.QueryRow(ctx, query, userID).Scan(&user.UserId, &user.Name, &user.Email, &user.PasswordHash, &user.IsActive, &user.CreateAt, &user.UpdateAt)
 	if err != nil {
 		return model.User{}, err
 	}
 	return user, nil
 }
+
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (model.User, error) {
+	query := `SELECT id_user, name, email, password_hash, is_active, created_at, updated_at FROM users WHERE email = $1`
+	var user model.User
+	err := r.db.QueryRow(ctx, query, email).Scan(&user.UserId, &user.Name, &user.Email, &user.PasswordHash, &user.IsActive, &user.CreateAt, &user.UpdateAt)
+	if err != nil {
+		return model.User{}, err
+	}
+	return user, nil
+}
+
+// Required indexes:
+//   CREATE UNIQUE INDEX idx_users_email ON users(email);
+//   CREATE INDEX idx_users_id ON users(id_user);
 
 func (r *UserRepository) Update(ctx context.Context, user model.UpdateUserRequest) error {
 	query := `UPDATE users SET name = $1, email = $2, updated_at = NOW() WHERE id_user = $3`
@@ -45,8 +59,6 @@ func (r *UserRepository) Update(ctx context.Context, user model.UpdateUserReques
 }
 
 func (r *UserRepository) FindAll(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.User], error) {
-	// Required indexes:
-	//   CREATE INDEX idx_users_id ON users(id_user);
 	switch req.Size {
 	case 5, 10, 25, 50, 100:
 	default:
@@ -57,7 +69,7 @@ func (r *UserRepository) FindAll(ctx context.Context, req model.PageRequest, las
 		req.Page = 1
 	}
 
-	query := `SELECT id_user, name, email, created_at, updated_at FROM users WHERE id_user > $1 ORDER BY id_user LIMIT $2`
+	query := `SELECT id_user, name, email, is_active, created_at, updated_at FROM users WHERE id_user > $1 ORDER BY id_user LIMIT $2`
 	rows, err := r.db.Query(ctx, query, lastCursor, req.Size)
 	if err != nil {
 		return nil, err
@@ -68,7 +80,7 @@ func (r *UserRepository) FindAll(ctx context.Context, req model.PageRequest, las
 	var maxID int64 = lastCursor
 	for rows.Next() {
 		var user model.User
-		err = rows.Scan(&user.UserId, &user.Name, &user.Email, &user.CreateAt, &user.UpdateAt)
+		err = rows.Scan(&user.UserId, &user.Name, &user.Email, &user.IsActive, &user.CreateAt, &user.UpdateAt)
 		if err != nil {
 			return nil, err
 		}

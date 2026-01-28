@@ -14,6 +14,7 @@ type contextKey string
 
 const (
 	UserIDKey    contextKey = "user_id"
+	UserEmailKey contextKey = "user_email"
 	UserRolesKey contextKey = "user_roles"
 )
 
