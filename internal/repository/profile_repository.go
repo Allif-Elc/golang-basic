@@ -16,23 +16,40 @@ func NewProfileRepository(db *pgxpool.Pool) *ProfileRepository {
 }
 
 func (r *ProfileRepository) Create(ctx context.Context, profile *model.CreateProfileRequest) (*model.Profile, error) {
-	query := `INSERT INTO profiles (user_id, age, gender, bio, phone_number, website) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`
+	query := `INSERT INTO profiles (id_user, age, gender, bio, phonenumber, website) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`
 	var createdProfile model.Profile
 	err := r.db.QueryRow(ctx, query, profile.UserID, profile.Age, profile.Gender, profile.Bio, profile.PhoneNumber, profile.Website).Scan(&createdProfile.ProfileId, &createdProfile.CreateAt)
 	if err != nil {
 		return nil, err
 	}
 	createdProfile.UserID = profile.UserID
-	createdProfile.Age = profile.Age
-	createdProfile.Gender = profile.Gender
-	createdProfile.Bio = profile.Bio
-	createdProfile.PhoneNumber = profile.PhoneNumber
-	createdProfile.Website = profile.Website
+	// Set pgtype fields from pointer values
+	if profile.Age != nil {
+		createdProfile.Age.Int64 = int64(*profile.Age)
+		createdProfile.Age.Valid = true
+	}
+	if profile.Gender != nil {
+		createdProfile.Gender.String = *profile.Gender
+		createdProfile.Gender.Valid = true
+	}
+	if profile.Bio != nil {
+		createdProfile.Bio.String = *profile.Bio
+		createdProfile.Bio.Valid = true
+	}
+	if profile.PhoneNumber != nil {
+		createdProfile.PhoneNumber.String = *profile.PhoneNumber
+		createdProfile.PhoneNumber.Valid = true
+	}
+	if profile.Website != nil {
+		createdProfile.Website.String = *profile.Website
+		createdProfile.Website.Valid = true
+	}
 	return &createdProfile, nil
 
 }
+
 func (r *ProfileRepository) FindByID(ctx context.Context, profileID int64) (model.Profile, error) {
-	query := `SELECT id_profile, user_id, age, gender, bio, phone_number, website, created_at, updated_at FROM profiles WHERE id_profile = $1`
+	query := `SELECT id_profile, id_user, age, gender, bio, phonenumber, website, created_at, updated_at FROM profiles WHERE id_profile = $1`
 	var profile model.Profile
 	err := r.db.QueryRow(ctx, query, profileID).Scan(&profile.ProfileId, &profile.UserID, &profile.Age, &profile.Gender, &profile.Bio, &profile.PhoneNumber, &profile.Website, &profile.CreateAt, &profile.UpdateAt)
 	if err != nil {
@@ -42,14 +59,12 @@ func (r *ProfileRepository) FindByID(ctx context.Context, profileID int64) (mode
 }
 
 func (r *ProfileRepository) Update(ctx context.Context, profile model.UpdateProfileRequest) error {
-	query := `UPDATE profiles SET age = $1, gender = $2, bio = $3, phone_number = $4, website = $5, updated_at = NOW() WHERE id_profile = $6`
+	query := `UPDATE profiles SET age = $1, gender = $2, bio = $3, phonenumber = $4, website = $5, updated_at = NOW() WHERE id_profile = $6`
 	_, err := r.db.Exec(ctx, query, profile.Age, profile.Gender, profile.Bio, profile.PhoneNumber, profile.Website, profile.ProfileId)
 	return err
 }
 
 func (r *ProfileRepository) FindAll(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.Profile], error) {
-	// Required indexes:
-	//   CREATE INDEX idx_profiles_id ON profiles(id_profile);
 	switch req.Size {
 	case 5, 10, 25, 50, 100:
 	default:
@@ -60,7 +75,7 @@ func (r *ProfileRepository) FindAll(ctx context.Context, req model.PageRequest, 
 		req.Page = 1
 	}
 
-	query := `SELECT id_profile, user_id, age, gender, bio, phone_number, website, created_at, updated_at FROM profiles WHERE id_profile > $1 ORDER BY id_profile LIMIT $2`
+	query := `SELECT id_profile, id_user, age, gender, bio, phonenumber, website, created_at, updated_at FROM profiles WHERE id_profile > $1 ORDER BY id_profile LIMIT $2`
 	rows, err := r.db.Query(ctx, query, lastCursor, req.Size)
 	if err != nil {
 		return nil, err
@@ -94,10 +109,6 @@ func (r *ProfileRepository) FindAll(ctx context.Context, req model.PageRequest, 
 }
 
 func (r *ProfileRepository) FindAllWithUsers(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.Profile], error) {
-	// Required indexes:
-	//   CREATE INDEX idx_profiles_user_id ON profiles(user_id);
-	//   CREATE INDEX idx_users_id ON users(id_user);
-	//   CREATE INDEX idx_profiles_id ON profiles(id_profile);
 	switch req.Size {
 	case 5, 10, 25, 50, 100:
 	default:
@@ -108,10 +119,10 @@ func (r *ProfileRepository) FindAllWithUsers(ctx context.Context, req model.Page
 		req.Page = 1
 	}
 
-	query := `SELECT p.id_profile, p.user_id, p.age, p.gender, p.bio, p.phone_number, p.website, p.created_at, p.updated_at,
+	query := `SELECT p.id_profile, p.id_user, p.age, p.gender, p.bio, p.phonenumber, p.website, p.created_at, p.updated_at,
 			  u.id_user, u.name, u.email, u.is_active, u.created_at, u.updated_at
 			  FROM profiles p
-			  JOIN users u ON p.user_id = u.id_user
+			  JOIN users u ON p.id_user = u.id_user
 			  WHERE p.id_profile > $1
 			  ORDER BY p.id_profile
 			  LIMIT $2`
