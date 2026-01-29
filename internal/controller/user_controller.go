@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"golang-basic/api/internal/middleware"
 	"golang-basic/api/internal/model"
 	"golang-basic/api/internal/utility"
 	"net/http"
@@ -16,6 +17,7 @@ type UserServiceInterface interface {
 	UpdateUser(ctx context.Context, req model.UpdateUserRequest) error
 	GetAllUsers(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.User], error)
 	GetUserByID(ctx context.Context, id int64) (model.User, error)
+	UpdatePassword(ctx context.Context, userID int64, req model.UpdatePasswordRequest) error
 }
 
 type UserController struct {
@@ -92,7 +94,7 @@ func (c *UserController) GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utility.SendSuccess(w, http.StatusOK, "Users retrieved successfully", result.Data)
+	utility.SendSuccess(w, http.StatusOK, "Users retrieved successfully", result)
 }
 
 func (c *UserController) GetUserByID(w http.ResponseWriter, r *http.Request) {
@@ -110,4 +112,44 @@ func (c *UserController) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utility.SendSuccess(w, http.StatusOK, "User retrieved successfully", user)
+}
+
+func (c *UserController) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	targetUserID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		utility.SendError(w, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+
+	ctxUserID := r.Context().Value(middleware.UserIDKey)
+	if ctxUserID == nil {
+		utility.SendError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	authenticatedUserID, ok := ctxUserID.(int64)
+	if !ok {
+		utility.SendError(w, http.StatusUnauthorized, "Invalid user context")
+		return
+	}
+
+	if authenticatedUserID != targetUserID {
+		utility.SendError(w, http.StatusForbidden, "You can only update your own password")
+		return
+	}
+
+	var req model.UpdatePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	err = c.service.UpdatePassword(r.Context(), targetUserID, req)
+	if err != nil {
+		utility.SendError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	utility.SendSuccess(w, http.StatusOK, "Password updated successfully", nil)
 }

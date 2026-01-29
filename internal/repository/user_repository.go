@@ -58,6 +58,12 @@ func (r *UserRepository) Update(ctx context.Context, user model.UpdateUserReques
 	return err
 }
 
+func (r *UserRepository) UpdatePassword(ctx context.Context, userID int64, newPasswordHash string) error {
+	query := `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id_user = $2`
+	_, err := r.db.Exec(ctx, query, newPasswordHash, userID)
+	return err
+}
+
 func (r *UserRepository) FindAll(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.User], error) {
 	switch req.Size {
 	case 5, 10, 25, 50, 100:
