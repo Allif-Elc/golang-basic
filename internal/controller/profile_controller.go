@@ -7,6 +7,7 @@ import (
 	"golang-basic/api/internal/utility"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -28,6 +29,11 @@ func NewProfileController(service ProfileServiceInterface) *ProfileController {
 }
 
 func (c *ProfileController) CreateProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
 	var req model.CreateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
@@ -45,6 +51,11 @@ func (c *ProfileController) CreateProfile(w http.ResponseWriter, r *http.Request
 }
 
 func (c *ProfileController) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut && r.Method != http.MethodPatch {
+		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
 	var req model.UpdateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
@@ -62,6 +73,11 @@ func (c *ProfileController) UpdateProfile(w http.ResponseWriter, r *http.Request
 }
 
 func (c *ProfileController) GetAllProfiles(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
 	// Parse pagination parameters from query string
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
@@ -90,7 +106,21 @@ func (c *ProfileController) GetAllProfiles(w http.ResponseWriter, r *http.Reques
 }
 
 func (c *ProfileController) GetProfileByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	// Try to get ID from chi URL param first, fallback to path parsing
 	idStr := chi.URLParam(r, "id")
+	if idStr == "" {
+		// Parse from URL path for unit testing (e.g., "/profiles/123")
+		pathParts := strings.Split(r.URL.Path, "/")
+		if len(pathParts) > 0 {
+			idStr = pathParts[len(pathParts)-1]
+		}
+	}
+
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid profile ID")
@@ -108,7 +138,21 @@ func (c *ProfileController) GetProfileByID(w http.ResponseWriter, r *http.Reques
 }
 
 func (c *ProfileController) DeleteProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	// Try to get ID from chi URL param first, fallback to path parsing
 	idStr := chi.URLParam(r, "id")
+	if idStr == "" {
+		// Parse from URL path for unit testing (e.g., "/profiles/123")
+		pathParts := strings.Split(r.URL.Path, "/")
+		if len(pathParts) > 0 {
+			idStr = pathParts[len(pathParts)-1]
+		}
+	}
+
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, "Invalid profile ID")
