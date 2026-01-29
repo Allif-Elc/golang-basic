@@ -227,7 +227,7 @@ func validateProjectName(name string) error {
 
 	// Check for valid characters (letters, numbers, spaces, hyphens, underscores, periods)
 	// Using unicode character classes for internationalization support
-	matched, _ := regexp.MatchString(`^[\p{L}\p{N}\s\\-._]+$`, name)
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9\s\-_\.]+$`, name)
 	if !matched {
 		return fmt.Errorf("name can only contain letters, numbers, spaces, hyphens, underscores, and periods")
 	}
@@ -322,10 +322,10 @@ func validateProjectVersion(version string) error {
 func sanitizeSortField(sortField string) string {
 	// Whitelist approach (OWASP recommendation)
 	validFields := map[string]bool{
-		"":            true,
-		"name":        true,
-		"created_at":  true,
-		"updated_at":  true,
+		"":           true,
+		"name":       true,
+		"created_at": true,
+		"updated_at": true,
 	}
 
 	if validFields[sortField] {
@@ -460,4 +460,3 @@ func containsPathTraversalPatterns(input string) bool {
 
 	return false
 }
-

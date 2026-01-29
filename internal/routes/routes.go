@@ -78,7 +78,7 @@ func SetupRoutes() *chi.Mux {
 	// ========== AUTH ROUTES (PUBLIC) ==========
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.Post("/login", authController.Login)
-		r.Post("/register", authController.Register)
+		r.Post("/register", userController.CreateUser)
 		r.Post("/refresh", authController.RefreshToken)
 		r.With(jwtMiddleware.Authenticate()).Post("/logout", authController.Logout)
 	})
@@ -94,6 +94,7 @@ func SetupRoutes() *chi.Mux {
 			r.Route("/{id}", func(r chi.Router) {
 				r.With(jwtMiddleware.Authenticate()).Get("/", userController.GetUserByID)
 				r.With(jwtMiddleware.Authenticate()).Put("/", userController.UpdateUser)
+				r.With(jwtMiddleware.Authenticate()).Put("/password", userController.UpdatePassword)
 			})
 		})
 

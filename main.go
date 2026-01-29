@@ -6,6 +6,8 @@ import (
 	"golang-basic/api/internal/routes"
 	"log"
 	"net/http"
+
+	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {

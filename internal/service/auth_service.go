@@ -8,8 +8,6 @@ import (
 	"golang-basic/api/internal/model"
 	"golang-basic/api/internal/repository"
 	"golang-basic/api/internal/utility"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService struct {
@@ -30,7 +28,8 @@ func (s *AuthService) Login(ctx context.Context, req model.LoginRequest) (*model
 		return nil, utility.UnauthorizedError("Invalid credentials")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	valid, err := VerifyPassword(req.Password, user.PasswordHash)
+	if err != nil || !valid {
 		return nil, utility.UnauthorizedError("Invalid credentials")
 	}
 
@@ -53,7 +52,7 @@ func (s *AuthService) Login(ctx context.Context, req model.LoginRequest) (*model
 }
 
 func (s *AuthService) Register(ctx context.Context, req model.RegisterRequest) (*model.User, *model.TokenResponse, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hashedPassword, err := HashPassword(req.Password)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to hash password: %w", err)
 	}
@@ -61,7 +60,7 @@ func (s *AuthService) Register(ctx context.Context, req model.RegisterRequest) (
 	createReq := model.CreateUserRequest{
 		Name:     req.Name,
 		Email:    req.Email,
-		Password: string(hashedPassword),
+		Password: hashedPassword,
 	}
 
 	user, err := s.userRepo.Create(ctx, &createReq)

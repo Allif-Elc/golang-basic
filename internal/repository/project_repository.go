@@ -168,12 +168,6 @@ func (r *ProjectRepository) Delete(ctx context.Context, projectID int64) error {
 }
 
 // FindAll retrieves all projects with pagination and filters
-// Required indexes:
-//   CREATE INDEX idx_projects_user ON projects(id_user);
-//   CREATE INDEX idx_projects_is_public ON projects(is_public);
-//   CREATE INDEX idx_projects_name ON projects USING GIN (to_tsvector('english', name));
-//   CREATE INDEX idx_projects_description ON projects USING GIN (to_tsvector('english', description));
-//   CREATE INDEX idx_projects_created_at ON projects(created_at);
 func (r *ProjectRepository) FindAll(ctx context.Context, req model.ListProjectsRequest) (*model.PageResult[model.Project], error) {
 	// Validate pagination parameters
 	if req.Page < 1 {
@@ -276,7 +270,11 @@ func (r *ProjectRepository) FindAll(ctx context.Context, req model.ListProjectsR
 	// Get total count for pagination
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM projects %s", whereClause)
 	var totalCount int64
-	err = r.db.QueryRow(ctx, countQuery, args[:argNum-2]...).Scan(&totalCount)
+	if argNum > 2 {
+		err = r.db.QueryRow(ctx, countQuery, args[:argNum-2]...).Scan(&totalCount)
+	} else {
+		err = r.db.QueryRow(ctx, countQuery).Scan(&totalCount)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to count projects: %w", err)
 	}

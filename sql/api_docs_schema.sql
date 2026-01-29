@@ -1,7 +1,7 @@
 -- ============================================================================
 -- API Documentation Platform Schema
 -- Add to existing ABAC database
--- PostgreSQL 16+
+-- PostgreSQL 17+
 -- ============================================================================
 
 -- ============================================================================
@@ -115,6 +115,8 @@ CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at DESC);
 -- REST APIs indexes
 CREATE INDEX IF NOT EXISTS idx_rest_apis_id_project ON rest_apis(id_project);
 CREATE INDEX IF NOT EXISTS idx_rest_apis_method ON rest_apis(method);
+-- Composite index for project + method filtering (order: selective → equality → range)
+CREATE INDEX IF NOT EXISTS idx_rest_apis_project_method ON rest_apis(id_project, method);
 CREATE INDEX IF NOT EXISTS idx_rest_apis_headers ON rest_apis USING GIN (headers);
 CREATE INDEX IF NOT EXISTS idx_rest_apis_path_params ON rest_apis USING GIN (path_params);
 CREATE INDEX IF NOT EXISTS idx_rest_apis_query_params ON rest_apis USING GIN (query_params);
@@ -124,12 +126,16 @@ CREATE INDEX IF NOT EXISTS idx_rest_apis_responses ON rest_apis USING GIN (respo
 -- GraphQL APIs indexes
 CREATE INDEX IF NOT EXISTS idx_graphql_apis_id_project ON graphql_apis(id_project);
 CREATE INDEX IF NOT EXISTS idx_graphql_apis_type ON graphql_apis(type);
+-- Composite index for project + type filtering
+CREATE INDEX IF NOT EXISTS idx_graphql_apis_project_type ON graphql_apis(id_project, type);
 CREATE INDEX IF NOT EXISTS idx_graphql_apis_arguments ON graphql_apis USING GIN (arguments);
 CREATE INDEX IF NOT EXISTS idx_graphql_apis_examples ON graphql_apis USING GIN (examples);
 
 -- gRPC APIs indexes
 CREATE INDEX IF NOT EXISTS idx_grpc_apis_id_project ON grpc_apis(id_project);
 CREATE INDEX IF NOT EXISTS idx_grpc_apis_service_name ON grpc_apis(service_name);
+-- Composite index for project + service filtering
+CREATE INDEX IF NOT EXISTS idx_grpc_apis_project_service ON grpc_apis(id_project, service_name);
 CREATE INDEX IF NOT EXISTS idx_grpc_apis_request_message ON grpc_apis USING GIN (request_message);
 CREATE INDEX IF NOT EXISTS idx_grpc_apis_response_message ON grpc_apis USING GIN (response_message);
 CREATE INDEX IF NOT EXISTS idx_grpc_apis_examples ON grpc_apis USING GIN (examples);
