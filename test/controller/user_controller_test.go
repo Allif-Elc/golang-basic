@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"golang-basic/api/internal/controller"
+	appmiddleware "golang-basic/api/internal/middleware"
 	"golang-basic/api/internal/model"
 	"net/http"
 	"net/http/httptest"
@@ -15,10 +16,11 @@ import (
 )
 
 type MockUserService struct {
-	CreateUserFunc  func(ctx context.Context, req model.CreateUserRequest) (*model.User, error)
-	UpdateUserFunc  func(ctx context.Context, req model.UpdateUserRequest) error
-	GetAllUsersFunc func(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.User], error)
-	GetUserByIDFunc func(ctx context.Context, id int64) (model.User, error)
+	CreateUserFunc   func(ctx context.Context, req model.CreateUserRequest) (*model.User, error)
+	UpdateUserFunc   func(ctx context.Context, req model.UpdateUserRequest) error
+	GetAllUsersFunc  func(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.User], error)
+	GetUserByIDFunc  func(ctx context.Context, id int64) (model.User, error)
+	UpdatePasswordFunc func(ctx context.Context, userID int64, req model.UpdatePasswordRequest) error
 }
 
 func (m *MockUserService) CreateUser(ctx context.Context, req model.CreateUserRequest) (*model.User, error) {
@@ -37,6 +39,13 @@ func (m *MockUserService) GetUserByID(ctx context.Context, id int64) (model.User
 	return m.GetUserByIDFunc(ctx, id)
 }
 
+func (m *MockUserService) UpdatePassword(ctx context.Context, userID int64, req model.UpdatePasswordRequest) error {
+	if m.UpdatePasswordFunc != nil {
+		return m.UpdatePasswordFunc(ctx, userID, req)
+	}
+	return nil
+}
+
 // setupTestRouter creates a Chi router with user routes for testing
 func setupTestRouter(userCtrl *controller.UserController) *chi.Mux {
 	r := chi.NewRouter()
@@ -45,6 +54,7 @@ func setupTestRouter(userCtrl *controller.UserController) *chi.Mux {
 		r.Get("/", userCtrl.GetAllUsers)
 		r.Put("/", userCtrl.UpdateUser)
 		r.Get("/{id}", userCtrl.GetUserByID)
+		r.Put("/{id}/password", userCtrl.UpdatePassword)
 	})
 	return r
 }
@@ -131,6 +141,39 @@ func TestCreateUser_ServiceError(t *testing.T) {
 	reqBody := model.CreateUserRequest{
 		Name:  "John Doe",
 		Email: "invalid-email",
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+
+	ctrl.CreateUser(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&response)
+
+	if response["status"] != "error" {
+		t.Errorf("Expected status 'error', got '%s'", response["status"])
+	}
+}
+
+func TestCreateUser_PasswordTooShort(t *testing.T) {
+	mockService := &MockUserService{
+		CreateUserFunc: func(ctx context.Context, req model.CreateUserRequest) (*model.User, error) {
+			return nil, errors.New("password must be at least 8 characters")
+		},
+	}
+
+	ctrl := controller.NewUserController(mockService)
+
+	reqBody := model.CreateUserRequest{
+		Name:     "John Doe",
+		Email:    "john.doe@example.com",
+		Password: "short",
 	}
 
 	body, _ := json.Marshal(reqBody)
@@ -384,5 +427,138 @@ func TestGetUserByID_UserNotFound(t *testing.T) {
 
 	if response["status"] != "error" {
 		t.Errorf("Expected status 'error', got '%s'", response["status"])
+	}
+}
+
+func TestUpdatePassword_Success(t *testing.T) {
+	mockService := &MockUserService{
+		UpdatePasswordFunc: func(ctx context.Context, userID int64, req model.UpdatePasswordRequest) error {
+			return nil
+		},
+	}
+
+	ctrl := controller.NewUserController(mockService)
+	r := setupTestRouter(ctrl)
+
+	reqBody := model.UpdatePasswordRequest{
+		CurrentPassword: "oldPassword123",
+		NewPassword:     "newPassword123",
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPut, "/users/1/password", bytes.NewBuffer(body))
+
+	// Set authenticated user ID in context
+	req = req.WithContext(context.WithValue(req.Context(), appmiddleware.UserIDKey, int64(1)))
+
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&response)
+
+	if response["status"] != "success" {
+		t.Errorf("Expected status 'success', got '%s'", response["status"])
+	}
+}
+
+func TestUpdatePassword_WrongCurrentPassword(t *testing.T) {
+	mockService := &MockUserService{
+		UpdatePasswordFunc: func(ctx context.Context, userID int64, req model.UpdatePasswordRequest) error {
+			return errors.New("current password is incorrect")
+		},
+	}
+
+	ctrl := controller.NewUserController(mockService)
+	r := setupTestRouter(ctrl)
+
+	reqBody := model.UpdatePasswordRequest{
+		CurrentPassword: "wrongPassword",
+		NewPassword:     "newPassword123",
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPut, "/users/1/password", bytes.NewBuffer(body))
+	req = req.WithContext(context.WithValue(req.Context(), appmiddleware.UserIDKey, int64(1)))
+
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&response)
+
+	if response["status"] != "error" {
+		t.Errorf("Expected status 'error', got '%s'", response["status"])
+	}
+}
+
+func TestUpdatePassword_ShortPassword(t *testing.T) {
+	mockService := &MockUserService{
+		UpdatePasswordFunc: func(ctx context.Context, userID int64, req model.UpdatePasswordRequest) error {
+			return errors.New("new password must be at least 8 characters")
+		},
+	}
+
+	ctrl := controller.NewUserController(mockService)
+	r := setupTestRouter(ctrl)
+
+	reqBody := model.UpdatePasswordRequest{
+		CurrentPassword: "oldPassword123",
+		NewPassword:     "short",
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPut, "/users/1/password", bytes.NewBuffer(body))
+	req = req.WithContext(context.WithValue(req.Context(), appmiddleware.UserIDKey, int64(1)))
+
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestUpdatePassword_UnauthorizedUser(t *testing.T) {
+	mockService := &MockUserService{}
+
+	ctrl := controller.NewUserController(mockService)
+	r := setupTestRouter(ctrl)
+
+	reqBody := model.UpdatePasswordRequest{
+		CurrentPassword: "oldPassword123",
+		NewPassword:     "newPassword123",
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPut, "/users/1/password", bytes.NewBuffer(body))
+
+	// Set authenticated user ID to different user
+	req = req.WithContext(context.WithValue(req.Context(), appmiddleware.UserIDKey, int64(2)))
+
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status code %d, got %d", http.StatusForbidden, w.Code)
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&response)
+
+	if response["message"] != "You can only update your own password" {
+		t.Errorf("Expected message 'You can only update your own password', got '%s'", response["message"])
 	}
 }
