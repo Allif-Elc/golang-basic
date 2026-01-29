@@ -2,6 +2,7 @@ package utility
 
 import (
 	"crypto/rsa"
+	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -20,6 +21,15 @@ type Claims struct {
 type JWTManager struct {
 	privateKey *rsa.PrivateKey
 	publicKey  *rsa.PublicKey
+}
+
+// NewJWTManager creates a new JWTManager with the provided RSA keys.
+// This is primarily intended for testing purposes.
+func NewJWTManager(privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey) *JWTManager {
+	return &JWTManager{
+		privateKey: privateKey,
+		publicKey:  publicKey,
+	}
 }
 
 var (
@@ -50,17 +60,42 @@ func GetJWTManager() *JWTManager {
 func loadPrivateKey() (*rsa.PrivateKey, error) {
 	keyPEM := os.Getenv("JWT_PRIVATE_KEY")
 	if keyPEM == "" {
-		return nil, fmt.Errorf("JWT_PRIVATE_KEY environment variable not set")
+		keyPath := os.Getenv("JWT_PRIVATE_KEY_PATH")
+		if keyPath == "" {
+			keyPath = "keys/jwt-private-key.pem"
+		}
+		data, err := os.ReadFile(keyPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read private key file %s: %w", keyPath, err)
+		}
+		keyPEM = string(data)
 	}
 
 	block, _ := pem.Decode([]byte(keyPEM))
 	if block == nil {
-		return nil, fmt.Errorf("failed to parse PEM block containing private key")
+		return nil, fmt.Errorf("failed to decode PEM block")
 	}
 
-	key, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(keyPEM))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse RSA private key: %w", err)
+	var key *rsa.PrivateKey
+	var err error
+
+	if block.Type == "RSA PRIVATE KEY" {
+		key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse PKCS1 private key: %w", err)
+		}
+	} else if block.Type == "PRIVATE KEY" {
+		parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse PKCS8 private key: %w", err)
+		}
+		var ok bool
+		key, ok = parsedKey.(*rsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("not an RSA private key")
+		}
+	} else {
+		return nil, fmt.Errorf("unsupported key type: %s", block.Type)
 	}
 
 	return key, nil
@@ -69,7 +104,15 @@ func loadPrivateKey() (*rsa.PrivateKey, error) {
 func loadPublicKey() (*rsa.PublicKey, error) {
 	keyPEM := os.Getenv("JWT_PUBLIC_KEY")
 	if keyPEM == "" {
-		return nil, fmt.Errorf("JWT_PUBLIC_KEY environment variable not set")
+		keyPath := os.Getenv("JWT_PUBLIC_KEY_PATH")
+		if keyPath == "" {
+			keyPath = "keys/jwt-public-key.pem"
+		}
+		data, err := os.ReadFile(keyPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read public key file %s: %w", keyPath, err)
+		}
+		keyPEM = string(data)
 	}
 
 	key, err := jwt.ParseRSAPublicKeyFromPEM([]byte(keyPEM))

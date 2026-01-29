@@ -18,6 +18,13 @@ func NewJWTMiddleware() *JWTMiddleware {
 	}
 }
 
+// NewJWTMiddlewareWithManager creates a new JWTMiddleware with a custom JWTManager for testing
+func NewJWTMiddlewareWithManager(manager *utility.JWTManager) *JWTMiddleware {
+	return &JWTMiddleware{
+		jwtManager: manager,
+	}
+}
+
 func (j *JWTMiddleware) Authenticate() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
