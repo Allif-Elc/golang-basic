@@ -27,7 +27,7 @@ func (r *AuthorizationRepository) GetUserRoles(ctx context.Context, userID int64
 	query := `
 		SELECT ua.value
 		FROM user_attributes ua
-		INNER JOIN attributes a ON ua.id_attribute = a.id_user_attribute
+		INNER JOIN attributes a ON ua.id_attribute = a.id_attribute
 		WHERE ua.id_user = $1 AND a.name = 'role'
 	`
 
@@ -54,17 +54,39 @@ func (r *AuthorizationRepository) GetUserRoles(ctx context.Context, userID int64
 }
 
 // GetMatchingPolicies fetches policies that match the resource and action
+// Supports wildcard matching:
+//   - Full wildcard "*" matches all resources
+//   - Prefix wildcard "prefix_*" matches resources starting with "prefix_"
+//   - Action wildcard ["*"] matches all actions
 // Required indexes:
-//   CREATE INDEX idx_policies_is_active ON policies(is_active);
-//   CREATE INDEX idx_policies_rule_resource ON policies USING GIN ((policy_rule->>'resource'));
-//   CREATE INDEX idx_policies_rule_action ON policies USING GIN ((policy_rule->>'action'));
+//
+//	CREATE INDEX idx_policies_is_active ON policies(is_active);
+//	CREATE INDEX idx_policies_rule_resource ON policies ((policy_rule->>'resource'));
+//	CREATE INDEX idx_policies_rule_action ON policies USING GIN ((policy_rule->'action'));
 func (r *AuthorizationRepository) GetMatchingPolicies(ctx context.Context, resource, action string) ([]model.Policy, error) {
 	query := `
-		SELECT policy_id, name, policy_rule, is_active, created_at, updated_at
+		SELECT id_policy, name, policy_rule, is_active, created_at, updated_at
 		FROM policies
 		WHERE is_active = true
-		  AND policy_rule->>'resource' = $1
-		  AND policy_rule->>'action' = $2
+		  AND (
+		    -- Exact match (original behavior)
+		    policy_rule->>'resource' = $1
+		    -- Full wildcard "*" matches everything
+		    OR policy_rule->>'resource' = '*'
+		    -- Prefix wildcard: "prefix_*" matches any resource starting with "prefix_"
+		    OR (
+		      policy_rule->>'resource' LIKE '%_\*'
+		      AND substr(policy_rule->>'resource', 1, length(policy_rule->>'resource') - 2) = substr($1, 1, length(policy_rule->>'resource') - 2)
+		      AND substr($1, length(policy_rule->>'resource') - 1, 1) = '_'
+		      AND length($1) > length(policy_rule->>'resource') - 1
+		    )
+		  )
+		  AND (
+		    -- Action array contains requested action (original behavior)
+		    policy_rule->'action' @> to_jsonb(ARRAY[$2])
+		    -- Or action array contains wildcard "*"
+		    OR policy_rule->'action' @> to_jsonb(ARRAY['*'])
+		  )
 	`
 
 	rows, err := r.db.Query(ctx, query, resource, action)
@@ -91,10 +113,11 @@ func (r *AuthorizationRepository) GetMatchingPolicies(ctx context.Context, resou
 
 // LogAuditDecision records authorization decision for compliance
 // Required indexes:
-//   CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
-//   CREATE INDEX idx_audit_logs_resource ON audit_logs(resource);
-//   CREATE INDEX idx_audit_logs_action ON audit_logs(action);
-//   CREATE INDEX idx_audit_logs_created ON audit_logs(created_at);
+//
+//	CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
+//	CREATE INDEX idx_audit_logs_resource ON audit_logs(resource);
+//	CREATE INDEX idx_audit_logs_action ON audit_logs(action);
+//	CREATE INDEX idx_audit_logs_created ON audit_logs(created_at);
 func (r *AuthorizationRepository) LogAuditDecision(
 	ctx context.Context,
 	userID int64,

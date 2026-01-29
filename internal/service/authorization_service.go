@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"golang-basic/api/internal/model"
 )
 
@@ -61,8 +63,8 @@ func (s *AuthorizationService) Authorize(ctx context.Context, req model.Authoriz
 		return resp, nil
 	}
 
-	// Step 3: Evaluate policies against user roles (in-memory: ~1-2ms)
-	allowed, reason := s.evaluatePolicies(ctx, roles, policies)
+	// Step 3: Evaluate policies against user roles and wildcard patterns (in-memory: ~1-5ms)
+	allowed, reason := s.evaluatePolicies(ctx, roles, policies, req.Resource, req.Action)
 
 	resp := model.AuthorizeResponse{
 		Allowed: allowed,
@@ -75,11 +77,12 @@ func (s *AuthorizationService) Authorize(ctx context.Context, req model.Authoriz
 	return resp, nil
 }
 
-// evaluatePolicies checks if any user role matches a policy
+// evaluatePolicies checks if any user role matches a policy and validates wildcard patterns
 func (s *AuthorizationService) evaluatePolicies(
 	ctx context.Context,
 	userRoles []string,
 	policies []model.Policy,
+	resource, action string,
 ) (bool, string) {
 	// Build role set for O(1) lookup
 	roleSet := make(map[string]struct{})
@@ -95,12 +98,68 @@ func (s *AuthorizationService) evaluatePolicies(
 		}
 
 		// Check if user has the required role
-		if _, exists := roleSet[rule.Role]; exists {
-			return true, fmt.Sprintf("access granted via policy '%s' with role '%s'", policy.Name, rule.Role)
+		if _, exists := roleSet[rule.Role]; !exists {
+			continue // User doesn't have this policy's role
 		}
+
+		// Validate resource matches policy's wildcard pattern
+		if !matchesResource(rule.Resource, resource) {
+			continue
+		}
+
+		// Validate action matches policy's action array (with wildcard support)
+		if !matchesAction(rule.Action, action) {
+			continue
+		}
+
+		return true, fmt.Sprintf("access granted via policy '%s' with role '%s'", policy.Name, rule.Role)
 	}
 
 	return false, fmt.Sprintf("access denied: user roles %v do not match any policy", userRoles)
+}
+
+// matchesResource checks if requested resource matches policy resource pattern
+// Supports: exact match, full wildcard "*", prefix wildcard "prefix_*"
+func matchesResource(policyResource, requestedResource string) bool {
+	// Full wildcard matches everything
+	if policyResource == "*" {
+		return true
+	}
+
+	// Exact match
+	if policyResource == requestedResource {
+		return true
+	}
+
+	// Prefix wildcard: "prefix_*" matches "prefix_anything"
+	if len(policyResource) > 2 && strings.HasSuffix(policyResource, "_*") {
+		prefix := policyResource[:len(policyResource)-2]
+		// Requested resource must start with prefix and be longer than prefix
+		if strings.HasPrefix(requestedResource, prefix) && len(requestedResource) > len(prefix) {
+			// Check next character after prefix is "_"
+			if requestedResource[len(prefix)] == '_' {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// matchesAction checks if requested action matches policy action array
+// Supports: exact match in array, wildcard ["*"] matches all
+func matchesAction(policyActions []string, requestedAction string) bool {
+	for _, action := range policyActions {
+		// Wildcard matches all actions
+		if action == "*" {
+			return true
+		}
+		// Exact match
+		if action == requestedAction {
+			return true
+		}
+	}
+	return false
 }
 
 // parsePolicyRule converts JSONB bytes to PolicyRule struct

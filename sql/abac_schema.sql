@@ -19,8 +19,9 @@ CREATE TABLE IF NOT EXISTS attributes (
 -- Users table: basic user information
 CREATE TABLE IF NOT EXISTS users (
     id_user BIGSERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
-    username VARCHAR(100) NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -98,7 +99,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 -- Users table indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_name ON users(name);
 CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active) WHERE is_active = false;
 
 -- Profiles table indexes
@@ -244,11 +245,15 @@ INSERT INTO attributes (id_attribute, name, description) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 -- Insert sample users
-INSERT INTO users (id_user, email, username, is_active) VALUES
-(1, 'alice@company.com', 'alice_hr', true),
-(2, 'bob@company.com', 'bob_manager', true),
-(3, 'charlie@company.com', 'charlie_engineer', true),
-(4, 'dave@company.com', 'dave_staff', true)
+INSERT INTO users (id_user, name, email, password_hash, is_active) VALUES
+(1, 'Alice HR', 'alice@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_1', true),
+(2, 'Bob Manager', 'bob@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_2', true),
+(3, 'Charlie Engineer', 'charlie@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_3', true),
+(4, 'Dave Staff', 'dave@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_4', true),
+(5, 'Eve Developer', 'eve@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_5', true),
+(6, 'Frank TechWriter', 'frank@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_6', true),
+(7, 'Grace Admin', 'grace@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_7', true),
+(8, 'Henry Viewer', 'henry@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_8', true)
 ON CONFLICT (email) DO NOTHING;
 
 -- Insert sample profiles
@@ -256,15 +261,23 @@ INSERT INTO profiles (id_profile, id_user, age, gender, bio) VALUES
 (1, 1, 30, 'female', 'Alice the HR Manager'),
 (2, 2, 35, 'male', 'Bob the Budget Manager'),
 (3, 3, 28, 'male', 'Charlie the Engineer'),
-(4, 4, 25, 'male', 'Dave the Staff member')
+(4, 4, 25, 'male', 'Dave the Staff member'),
+(5, 5, 27, 'female', 'Eve the Developer'),
+(6, 6, 32, 'male', 'Frank the Technical Writer'),
+(7, 7, 40, 'female', 'Grace the Admin'),
+(8, 8, 26, 'male', 'Henry the Viewer')
 ON CONFLICT (id_user) DO NOTHING;
 
 -- Assign roles to users
 INSERT INTO user_attributes (id_user, id_attribute, value) VALUES
-(1, 1, 'HR'),           -- alice has HR role
-(2, 1, 'Manager'),      -- bob has Manager role
-(3, 1, 'Engineer'),     -- charlie has Engineer role
-(4, 1, 'Staff')         -- dave has Staff role
+(1, 1, 'HR'),              -- alice has HR role
+(2, 1, 'Manager'),         -- bob has Manager role
+(3, 1, 'Engineer'),        -- charlie has Engineer role
+(4, 1, 'Staff'),           -- dave has Staff role
+(5, 1, 'developer'),       -- eve has developer role
+(6, 1, 'technical_writer'), -- frank has technical_writer role
+(7, 1, 'admin'),           -- grace has admin role
+(8, 1, 'viewer')           -- henry has viewer role
 ON CONFLICT (id_user, id_attribute, value) DO NOTHING;
 
 -- Insert resources

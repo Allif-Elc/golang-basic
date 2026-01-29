@@ -4,7 +4,7 @@ import "time"
 
 // Policy represents an access control policy
 type Policy struct {
-	PolicyId   int64     `json:"policy_id"`
+	PolicyId   int64     `json:"id_policy"`
 	Name       string    `json:"name"`
 	PolicyRule []byte    `json:"policy_rule"` // JSONB stored as []byte
 	IsActive   bool      `json:"is_active"`
@@ -23,7 +23,7 @@ type UserAttribute struct {
 
 // AuditLog represents authorization decision logging
 type AuditLog struct {
-	ID        int64     `json:"id"`
+	ID        int64     `json:"id_audit_log"`
 	UserID    int64     `json:"id_user"`
 	Resource  string    `json:"resource"`
 	Action    string    `json:"action"`
@@ -34,9 +34,9 @@ type AuditLog struct {
 
 // PolicyRule represents the parsed JSONB policy structure
 type PolicyRule struct {
-	Role     string `json:"role"`
-	Resource string `json:"resource"`
-	Action   string `json:"action"`
+	Role     string   `json:"role"`
+	Resource string   `json:"resource"`
+	Action   []string `json:"action"` // Action array: ["read", "write"] or ["*"]
 }
 
 // AuthorizeRequest represents an authorization check request
