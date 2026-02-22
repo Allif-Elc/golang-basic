@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // GraphQLAPI represents a GraphQL API documentation
 type GraphQLAPI struct {
@@ -15,6 +18,34 @@ type GraphQLAPI struct {
 	Examples     []byte             `json:"examples"`    // JSONB: Array of example queries
 	CreatedAt    time.Time          `json:"created_at"`
 	UpdatedAt    time.Time          `json:"updated_at"`
+}
+
+// MarshalJSON implements custom JSON marshaling for GraphQLAPI
+func (g *GraphQLAPI) MarshalJSON() ([]byte, error) {
+	type Alias GraphQLAPI
+	aux := &struct {
+		Arguments json.RawMessage `json:"arguments"`
+		Examples  json.RawMessage `json:"examples"`
+		*Alias
+	}{
+		Alias: (*Alias)(g),
+	}
+
+	if len(g.Arguments) > 0 {
+		aux.Arguments = json.RawMessage(g.Arguments)
+	}
+	if len(g.Examples) > 0 {
+		aux.Examples = json.RawMessage(g.Examples)
+	}
+
+	if aux.Arguments == nil {
+		aux.Arguments = json.RawMessage("[]")
+	}
+	if aux.Examples == nil {
+		aux.Examples = json.RawMessage("[]")
+	}
+
+	return json.Marshal(aux)
 }
 
 // CreateGraphQLAPIRequest represents a request to create GraphQL API documentation
@@ -44,7 +75,7 @@ type GraphQLArgument struct {
 	Type         string      `json:"type" validate:"required"` // e.g., "ID!", "String", "[String!]"
 	Description  string      `json:"description"`
 	Required     bool        `json:"required"`
-	DefaultValue interface{} `json:"default_value"`
+	DefaultValue any `json:"default_value"`
 }
 
 // GraphQLExample represents a GraphQL query example
@@ -52,8 +83,8 @@ type GraphQLExample struct {
 	Name        string      `json:"name" validate:"required"`
 	Description string      `json:"description"`
 	Query       string      `json:"query" validate:"required"`
-	Variables   interface{} `json:"variables"`
-	Response    interface{} `json:"response"`
+	Variables   any `json:"variables"`
+	Response    any `json:"response"`
 }
 
 // ListGraphQLAPIsRequest represents a request to list GraphQL APIs with filters

@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // GrpcAPI represents a gRPC API documentation
 type GrpcAPI struct {
@@ -12,10 +15,45 @@ type GrpcAPI struct {
 	Description      string             `json:"description"`
 	RequestMessage   []byte             `json:"request_message"`  // JSONB: Array of field objects
 	ResponseMessage  []byte             `json:"response_message"` // JSONB: Array of field objects
-	ProtoDefinition  string             `json:"proto_definition"`  // TEXT: Actual .proto content
+	ProtoDefinition  string             `json:"proto_definition"` // TEXT: Actual .proto content
 	Examples         []byte             `json:"examples"`         // JSONB: Array of code examples
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+}
+
+// MarshalJSON implements custom JSON marshaling for GrpcAPI
+func (g *GrpcAPI) MarshalJSON() ([]byte, error) {
+	type Alias GrpcAPI
+	aux := &struct {
+		RequestMessage  json.RawMessage `json:"request_message"`
+		ResponseMessage json.RawMessage `json:"response_message"`
+		Examples        json.RawMessage `json:"examples"`
+		*Alias
+	}{
+		Alias: (*Alias)(g),
+	}
+
+	if len(g.RequestMessage) > 0 {
+		aux.RequestMessage = json.RawMessage(g.RequestMessage)
+	}
+	if len(g.ResponseMessage) > 0 {
+		aux.ResponseMessage = json.RawMessage(g.ResponseMessage)
+	}
+	if len(g.Examples) > 0 {
+		aux.Examples = json.RawMessage(g.Examples)
+	}
+
+	if aux.RequestMessage == nil {
+		aux.RequestMessage = json.RawMessage("[]")
+	}
+	if aux.ResponseMessage == nil {
+		aux.ResponseMessage = json.RawMessage("[]")
+	}
+	if aux.Examples == nil {
+		aux.Examples = json.RawMessage("[]")
+	}
+
+	return json.Marshal(aux)
 }
 
 // CreateGrpcAPIRequest represents a request to create gRPC API documentation
@@ -54,7 +92,7 @@ type GrpcExample struct {
 	Language    string      `json:"language" validate:"required"` // e.g., "go", "python", "java"
 	Description string      `json:"description"`
 	Code        string      `json:"code" validate:"required"`
-	Variables   interface{} `json:"variables"`
+	Variables   any `json:"variables"`
 }
 
 // ListGrpcAPIsRequest represents a request to list gRPC APIs with filters

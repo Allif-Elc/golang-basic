@@ -1,6 +1,12 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
+
+// restAPIAlias is used for custom JSON marshaling to avoid infinite recursion
+type restAPIAlias RestAPI
 
 // RestAPI represents a REST API documentation
 type RestAPI struct {
@@ -18,6 +24,59 @@ type RestAPI struct {
 	Responses   []byte             `json:"responses"`    // JSONB: Response examples by status
 	CreatedAt   time.Time          `json:"created_at"`
 	UpdatedAt   time.Time          `json:"updated_at"`
+}
+
+// MarshalJSON implements custom JSON marshaling for RestAPI
+// This properly serializes JSONB fields (stored as []byte) as JSON objects
+// instead of base64 strings which is Go's default behavior for []byte
+func (r *RestAPI) MarshalJSON() ([]byte, error) {
+	type Alias RestAPI
+	aux := &struct {
+		Headers     json.RawMessage `json:"headers"`
+		PathParams  json.RawMessage `json:"path_params"`
+		QueryParams json.RawMessage `json:"query_params"`
+		RequestBody json.RawMessage `json:"request_body"`
+		Responses   json.RawMessage `json:"responses"`
+		*Alias
+	}{
+		Alias: (*Alias)(r),
+	}
+
+	// Convert []byte to json.RawMessage for proper JSON serialization
+	if len(r.Headers) > 0 {
+		aux.Headers = json.RawMessage(r.Headers)
+	}
+	if len(r.PathParams) > 0 {
+		aux.PathParams = json.RawMessage(r.PathParams)
+	}
+	if len(r.QueryParams) > 0 {
+		aux.QueryParams = json.RawMessage(r.QueryParams)
+	}
+	if len(r.RequestBody) > 0 {
+		aux.RequestBody = json.RawMessage(r.RequestBody)
+	}
+	if len(r.Responses) > 0 {
+		aux.Responses = json.RawMessage(r.Responses)
+	}
+
+	// Set empty arrays for null fields
+	if aux.Headers == nil {
+		aux.Headers = json.RawMessage("[]")
+	}
+	if aux.PathParams == nil {
+		aux.PathParams = json.RawMessage("[]")
+	}
+	if aux.QueryParams == nil {
+		aux.QueryParams = json.RawMessage("[]")
+	}
+	if aux.RequestBody == nil {
+		aux.RequestBody = json.RawMessage("null")
+	}
+	if aux.Responses == nil {
+		aux.Responses = json.RawMessage("{}")
+	}
+
+	return json.Marshal(aux)
 }
 
 // CreateRestAPIRequest represents a request to create REST API documentation
@@ -57,11 +116,11 @@ type Header struct {
 
 // Parameter represents a path or query parameter
 type Parameter struct {
-	Name        string      `json:"name" validate:"required"`
-	Type        string      `json:"type" validate:"required,oneof=string integer boolean number"`
-	Description string      `json:"description"`
-	Required    bool        `json:"required"`
-	Default     interface{} `json:"default"`
+	Name        string `json:"name" validate:"required"`
+	Type        string `json:"type" validate:"required,oneof=string integer boolean number"`
+	Description string `json:"description"`
+	Required    bool   `json:"required"`
+	Default     any    `json:"default"`
 }
 
 // JSONSchema represents a JSON schema for request body
@@ -87,9 +146,9 @@ type Property struct {
 
 // ResponseExample represents a response example
 type ResponseExample struct {
-	StatusCode  int         `json:"status_code"`
-	Description string      `json:"description"`
-	Body        interface{} `json:"body"`
+	StatusCode  int    `json:"status_code"`
+	Description string `json:"description"`
+	Body        any    `json:"body"`
 }
 
 // ListRestAPIsRequest represents a request to list REST APIs with filters
