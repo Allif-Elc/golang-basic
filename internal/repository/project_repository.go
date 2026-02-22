@@ -167,6 +167,68 @@ func (r *ProjectRepository) Delete(ctx context.Context, projectID int64) error {
 	return nil
 }
 
+// GetAPIStats retrieves the count of REST, GraphQL, and gRPC APIs for a project
+func (r *ProjectRepository) GetAPIStats(ctx context.Context, projectID int64) (map[string]int64, error) {
+	query := `
+		SELECT
+			(SELECT COUNT(*) FROM rest_apis WHERE id_project = $1) as rest_count,
+			(SELECT COUNT(*) FROM graphql_apis WHERE id_project = $1) as graphql_count,
+			(SELECT COUNT(*) FROM grpc_apis WHERE id_project = $1) as grpc_count
+	`
+	var restCount, graphqlCount, grpcCount int64
+	err := r.db.QueryRow(ctx, query, projectID).Scan(&restCount, &graphqlCount, &grpcCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API stats: %w", err)
+	}
+	return map[string]int64{
+		"rest":     restCount,
+		"graphql": graphqlCount,
+		"grpc":     grpcCount,
+	}, nil
+}
+
+// DeleteAllAPIsByProject explicitly deletes all APIs for a project
+func (r *ProjectRepository) DeleteAllAPIsByProject(ctx context.Context, projectID int64) (map[string]int64, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var restCount, graphqlCount, grpcCount int64
+
+	// Delete REST APIs
+	tag, err := tx.Exec(ctx, "DELETE FROM rest_apis WHERE id_project = $1", projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete REST APIs: %w", err)
+	}
+	restCount = tag.RowsAffected()
+
+	// Delete GraphQL APIs
+	tag, err = tx.Exec(ctx, "DELETE FROM graphql_apis WHERE id_project = $1", projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete GraphQL APIs: %w", err)
+	}
+	graphqlCount = tag.RowsAffected()
+
+	// Delete gRPC APIs
+	tag, err = tx.Exec(ctx, "DELETE FROM grpc_apis WHERE id_project = $1", projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete gRPC APIs: %w", err)
+	}
+	grpcCount = tag.RowsAffected()
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return map[string]int64{
+		"rest":     restCount,
+		"graphql": graphqlCount,
+		"grpc":     grpcCount,
+	}, nil
+}
+
 // FindAll retrieves all projects with pagination and filters
 func (r *ProjectRepository) FindAll(ctx context.Context, req model.ListProjectsRequest) (*model.PageResult[model.Project], error) {
 	// Validate pagination parameters

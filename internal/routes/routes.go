@@ -59,7 +59,7 @@ func SetupRoutes() *chi.Mux {
 	r.Use(middleware.Compress(5)) // Before auth
 	r.Use(middleware.Recoverer)   // Last
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:3000"},
+		AllowedOrigins:   []string{"http://localhost:5173", "https://localhost:5173", "http://localhost:5174", "https://localhost:5174", "http://localhost:3000", "https://localhost:3000"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-User-ID"},
 		ExposedHeaders:   []string{"Link"},
@@ -117,6 +117,7 @@ func SetupRoutes() *chi.Mux {
 
 			r.Route("/{id}", func(r chi.Router) {
 				r.With(jwtMiddleware.OptionalAuth()).Get("/", projectController.GetProjectByID)
+				r.With(jwtMiddleware.OptionalAuth()).Get("/api-stats", projectController.GetProjectAPIStats)
 				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("projects", "write")).Put("/", projectController.UpdateProject)
 				r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("projects", "delete")).Delete("/", projectController.DeleteProject)
 			})

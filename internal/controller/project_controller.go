@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"golang-basic/api/internal/model"
 	"golang-basic/api/internal/utility"
 	"golang-basic/api/internal/middleware"
@@ -16,7 +17,8 @@ type ProjectServiceInterface interface {
 	CreateProject(ctx context.Context, userID int64, req model.CreateProjectRequest) (*model.Project, error)
 	GetProjectByID(ctx context.Context, projectID int64) (model.Project, error)
 	UpdateProject(ctx context.Context, projectID int64, req model.UpdateProjectRequest) (*model.Project, error)
-	DeleteProject(ctx context.Context, projectID int64) error
+	DeleteProject(ctx context.Context, projectID int64) (map[string]int64, error)
+	GetAPIStats(ctx context.Context, projectID int64) (map[string]int64, error)
 	ListProjects(ctx context.Context, req model.ListProjectsRequest) (*model.PageResult[model.Project], error)
 }
 
@@ -111,13 +113,37 @@ func (c *ProjectController) DeleteProject(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Delete project
-	if err := c.service.DeleteProject(r.Context(), projectID); err != nil {
+	// Delete project and get deleted counts
+	deletedCounts, err := c.service.DeleteProject(r.Context(), projectID)
+	if err != nil {
 		utility.SendError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	utility.SendSuccess(w, http.StatusOK, "Project deleted successfully", nil)
+	utility.SendSuccess(w, http.StatusOK,
+		fmt.Sprintf("Project deleted successfully with %d REST, %d GraphQL, %d gRPC APIs",
+			deletedCounts["rest"], deletedCounts["graphql"], deletedCounts["grpc"]),
+		deletedCounts)
+}
+
+// GetProjectAPIStats retrieves API statistics for a project
+func (c *ProjectController) GetProjectAPIStats(w http.ResponseWriter, r *http.Request) {
+	// Extract project ID from URL
+	projectIDStr := chi.URLParam(r, "id")
+	projectID, err := strconv.ParseInt(projectIDStr, 10, 64)
+	if err != nil {
+		utility.SendError(w, http.StatusBadRequest, "Invalid project ID")
+		return
+	}
+
+	// Get API stats
+	stats, err := c.service.GetAPIStats(r.Context(), projectID)
+	if err != nil {
+		utility.SendError(w, http.StatusNotFound, "Project not found")
+		return
+	}
+
+	utility.SendSuccess(w, http.StatusOK, "API stats retrieved successfully", stats)
 }
 
 // ListProjects handles project listing with pagination and filters

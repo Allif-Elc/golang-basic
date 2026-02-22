@@ -100,20 +100,36 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID int64, req
 	return project, nil
 }
 
-// DeleteProject removes a project
-func (s *ProjectService) DeleteProject(ctx context.Context, projectID int64) error {
-	// Check if project exists first
+// DeleteProject removes a project and explicitly deletes all APIs first
+func (s *ProjectService) DeleteProject(ctx context.Context, projectID int64) (map[string]int64, error) {
+	// First, verify project exists
 	_, err := s.repo.FindByID(ctx, projectID)
 	if err != nil {
-		return fmt.Errorf("project not found: %w", err)
+		return nil, fmt.Errorf("project not found: %w", err)
 	}
 
-	// Delete project
+	// Explicitly delete all APIs first and get counts
+	deletedCounts, err := s.repo.DeleteAllAPIsByProject(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete project APIs: %w", err)
+	}
+
+	// Then delete the project itself
 	if err := s.repo.Delete(ctx, projectID); err != nil {
-		return fmt.Errorf("failed to delete project: %w", err)
+		return nil, fmt.Errorf("failed to delete project: %w", err)
 	}
 
-	return nil
+	return deletedCounts, nil
+}
+
+// GetAPIStats retrieves the count of APIs for a project
+func (s *ProjectService) GetAPIStats(ctx context.Context, projectID int64) (map[string]int64, error) {
+	// Verify project exists
+	_, err := s.repo.FindByID(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.GetAPIStats(ctx, projectID)
 }
 
 // ListProjects retrieves projects with pagination and filters
