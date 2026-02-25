@@ -18,7 +18,10 @@ func main() {
 		defer config.CloseDatabase()
 	}
 
-	// Setup Chi router
+	if err := config.InitMinio(); err != nil {
+		log.Printf("Warning: MinIO not available: %v", err)
+	}
+
 	r := routes.SetupRoutes()
 
 	port := ":3003"
