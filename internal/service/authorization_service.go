@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"golang-basic/api/internal/model"
@@ -14,6 +15,7 @@ import (
 type AuthorizationRepositoryInterface interface {
 	GetUserRoles(ctx context.Context, userID int64) ([]string, error)
 	GetMatchingPolicies(ctx context.Context, resource, action string) ([]model.Policy, error)
+	GetUserPoliciesByUserID(ctx context.Context, userID int64) ([]model.PolicyWithPriority, error)
 	LogAuditDecision(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error
 }
 
@@ -30,6 +32,14 @@ func NewAuthorizationService(repo AuthorizationRepositoryInterface) *Authorizati
 
 // Authorize checks if a user is allowed to perform an action on a resource
 // Returns: (allowed, reason, error)
+//
+// Authorization Flow (Priority-Based):
+// 1. Fetch user roles (~5-10ms)
+// 2. Fetch user-specific policies with priority (~5-10ms)
+// 3. Fetch matching role-based policies (~10-20ms)
+// 4. Merge and sort by priority (in-memory)
+// 5. Evaluate policies in priority order (~1-5ms)
+// 6. Log audit decision (~5-10ms)
 //
 // Performance: <50ms with 1M rows when indexes are properly configured
 func (s *AuthorizationService) Authorize(ctx context.Context, req model.AuthorizeRequest) (model.AuthorizeResponse, error) {
@@ -48,13 +58,23 @@ func (s *AuthorizationService) Authorize(ctx context.Context, req model.Authoriz
 		return resp, nil
 	}
 
-	// Step 2: Fetch matching policies (indexed JSONB query: ~10-20ms)
+	// Step 2: Fetch user-specific policies with priority (NEW - higher priority)
+	userPolicies, err := s.repo.GetUserPoliciesByUserID(ctx, req.UserID)
+	if err != nil {
+		return model.AuthorizeResponse{}, fmt.Errorf("failed to fetch user policies: %w", err)
+	}
+
+	// Step 3: Fetch matching role-based policies (existing)
 	policies, err := s.repo.GetMatchingPolicies(ctx, req.Resource, req.Action)
 	if err != nil {
 		return model.AuthorizeResponse{}, fmt.Errorf("failed to fetch policies: %w", err)
 	}
 
-	if len(policies) == 0 {
+	// Step 4: Merge and sort by priority (NEW)
+	// User policies have their assigned priority, role-based policies have priority 0
+	allPolicies := s.mergeAndSortPolicies(userPolicies, policies)
+
+	if len(allPolicies) == 0 {
 		resp := model.AuthorizeResponse{
 			Allowed: false,
 			Reason:  "no policies found for resource/action",
@@ -63,15 +83,15 @@ func (s *AuthorizationService) Authorize(ctx context.Context, req model.Authoriz
 		return resp, nil
 	}
 
-	// Step 3: Evaluate policies against user roles and wildcard patterns (in-memory: ~1-5ms)
-	allowed, reason := s.evaluatePolicies(ctx, roles, policies, req.Resource, req.Action)
+	// Step 5: Evaluate policies with priority (MODIFIED)
+	allowed, reason := s.evaluatePoliciesWithPriority(ctx, roles, allPolicies, req.Resource, req.Action)
 
 	resp := model.AuthorizeResponse{
 		Allowed: allowed,
 		Reason:  reason,
 	}
 
-	// Step 4: Log audit decision (async insert: ~5-10ms)
+	// Step 6: Log audit decision (async insert: ~5-10ms)
 	s.logAudit(ctx, req, resp)
 
 	return resp, nil
@@ -113,6 +133,80 @@ func (s *AuthorizationService) evaluatePolicies(
 		}
 
 		return true, fmt.Sprintf("access granted via policy '%s' with role '%s'", policy.Name, rule.Role)
+	}
+
+	return false, fmt.Sprintf("access denied: user roles %v do not match any policy", userRoles)
+}
+
+// mergeAndSortPolicies combines user policies and role-based policies, sorting by priority
+// User policies have their assigned priority, role-based policies have priority 0
+func (s *AuthorizationService) mergeAndSortPolicies(
+	userPolicies []model.PolicyWithPriority,
+	rolePolicies []model.Policy,
+) []model.PolicyWithPriority {
+	result := make([]model.PolicyWithPriority, 0, len(userPolicies)+len(rolePolicies))
+
+	// Add user policies with their priority
+	result = append(result, userPolicies...)
+
+	// Add role-based policies with priority 0 (lower than user policies)
+	for _, p := range rolePolicies {
+		result = append(result, model.PolicyWithPriority{Policy: p, Priority: 0})
+	}
+
+	// Sort by priority descending (higher priority first)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Priority > result[j].Priority
+	})
+
+	return result
+}
+
+// evaluatePoliciesWithPriority checks policies in priority order
+// First matching policy wins (regardless of allow/deny)
+// User policies (priority > 0) are evaluated before role-based policies (priority = 0)
+func (s *AuthorizationService) evaluatePoliciesWithPriority(
+	ctx context.Context,
+	userRoles []string,
+	policiesWithPriority []model.PolicyWithPriority,
+	resource, action string,
+) (bool, string) {
+	// Build role set for O(1) lookup
+	roleSet := make(map[string]struct{})
+	for _, role := range userRoles {
+		roleSet[role] = struct{}{}
+	}
+
+	// Check each policy in priority order
+	for _, pwp := range policiesWithPriority {
+		rule, err := parsePolicyRule(pwp.Policy.PolicyRule)
+		if err != nil {
+			continue // Skip malformed policies
+		}
+
+		// Check if user has the required role
+		if _, exists := roleSet[rule.Role]; !exists {
+			continue // User doesn't have this policy's role
+		}
+
+		// Validate resource matches policy's wildcard pattern
+		if !matchesResource(rule.Resource, resource) {
+			continue
+		}
+
+		// Validate action matches policy's action array
+		if !matchesAction(rule.Action, action) {
+			continue
+		}
+
+		// Found matching policy
+		source := "role-based policy"
+		if pwp.Priority > 0 {
+			source = fmt.Sprintf("user policy (priority: %d)", pwp.Priority)
+		} else if pwp.Priority < 0 {
+			source = fmt.Sprintf("user policy (priority: %d, low priority)", pwp.Priority)
+		}
+		return true, fmt.Sprintf("access granted via %s '%s' with role '%s'", source, pwp.Policy.Name, rule.Role)
 	}
 
 	return false, fmt.Sprintf("access denied: user roles %v do not match any policy", userRoles)

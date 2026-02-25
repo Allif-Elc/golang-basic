@@ -188,6 +188,14 @@ func (s *ProfileService) GetProfileByID(ctx context.Context, id int64) (model.Pr
 	return profile, nil
 }
 
+func (s *ProfileService) GetProfileByUserID(ctx context.Context, userID int64) (model.Profile, error) {
+	profile, err := s.repo.FindByUserID(ctx, userID)
+	if err != nil {
+		return model.Profile{}, err
+	}
+	return profile, nil
+}
+
 func (s *ProfileService) DeleteProfile(ctx context.Context, profileId int64) error {
 	return s.repo.Delete(ctx, profileId)
 }

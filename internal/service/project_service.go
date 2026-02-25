@@ -162,6 +162,37 @@ func (s *ProjectService) ListProjects(ctx context.Context, req model.ListProject
 	return result, nil
 }
 
+// ListProjectsWithStats retrieves projects with API statistics in a single query using LATERAL JOIN
+// This is the optimized version that eliminates N+1 queries
+func (s *ProjectService) ListProjectsWithStats(ctx context.Context, req model.ListProjectsRequest) (*model.PageResult[model.ProjectWithStats], error) {
+	// Sanitize search input to prevent SQL injection
+	if req.Search != "" {
+		req.Search = sanitizeInput(req.Search)
+		// Add wildcards for search
+		req.Search = "%" + req.Search + "%"
+	}
+
+	// Validate and sanitize sort parameters
+	req.SortBy = sanitizeSortField(req.SortBy)
+	req.SortOrder = sanitizeSortOrder(req.SortOrder)
+
+	// Set default values
+	if req.Page < 1 {
+		req.Page = 1
+	}
+	if req.Limit < 1 || req.Limit > 100 {
+		req.Limit = 10
+	}
+
+	// Get projects with stats in a single query
+	result, err := s.repo.FindAllWithStats(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list projects with stats: %w", err)
+	}
+
+	return result, nil
+}
+
 // GetProjectsByUser retrieves projects owned by a specific user
 func (s *ProjectService) GetProjectsByUser(ctx context.Context, userID int64, req model.ListProjectsRequest) (*model.PageResult[model.Project], error) {
 	// Set the user filter

@@ -130,6 +130,12 @@ func (s *PermissionService) CreateAttribute(ctx context.Context, req model.Creat
 	if err := s.validateDescription(req.Description, "description"); err != nil {
 		return nil, err
 	}
+	if err := s.validateAttributeType(req.Type); err != nil {
+		return nil, err
+	}
+	if err := s.validateEnumValues(req.Type, req.EnumValues); err != nil {
+		return nil, err
+	}
 
 	// Check if attribute already exists (uniqueness validation)
 	existing, err := s.repo.GetAttributeByName(ctx, req.Name)
@@ -196,6 +202,9 @@ func (s *PermissionService) CreateResource(ctx context.Context, req model.Create
 	if err := s.validateDescription(req.Description, "description"); err != nil {
 		return nil, err
 	}
+	if err := s.validateResourceType(req.ResourceType); err != nil {
+		return nil, err
+	}
 
 	// Check if resource already exists (uniqueness validation)
 	existing, err := s.repo.GetResourceByName(ctx, req.Name)
@@ -260,6 +269,12 @@ func (s *PermissionService) CreatePermission(ctx context.Context, req model.Crea
 		return nil, err
 	}
 	if err := s.validateDescription(req.Description, "description"); err != nil {
+		return nil, err
+	}
+	if err := s.validateEffect(req.Effect); err != nil {
+		return nil, err
+	}
+	if err := s.validateActions(req.Actions); err != nil {
 		return nil, err
 	}
 
@@ -337,4 +352,154 @@ func AggregateErrors(errs []error) error {
 	}
 
 	return errors.New(strings.Join(messages, "; "))
+}
+
+// validateAttributeType validates the attribute type
+func (s *PermissionService) validateAttributeType(attrType string) error {
+	validTypes := map[string]bool{"string": true, "number": true, "boolean": true, "enum": true}
+	if !validTypes[attrType] {
+		return ValidationError{
+			Field:   "type",
+			Message: "must be one of: string, number, boolean, enum",
+		}
+	}
+	return nil
+}
+
+// validateEnumValues validates enum values when type is enum
+func (s *PermissionService) validateEnumValues(attrType string, enumValues []string) error {
+	if attrType == "enum" && len(enumValues) == 0 {
+		return ValidationError{
+			Field:   "enum_values",
+			Message: "required when type is enum",
+		}
+	}
+	return nil
+}
+
+// validateEffect validates the permission effect
+func (s *PermissionService) validateEffect(effect string) error {
+	validEffects := map[string]bool{"allow": true, "deny": true}
+	if !validEffects[effect] {
+		return ValidationError{
+			Field:   "effect",
+			Message: "must be either 'allow' or 'deny'",
+		}
+	}
+	return nil
+}
+
+// validateActions validates the permission actions
+func (s *PermissionService) validateActions(actions []string) error {
+	if len(actions) == 0 {
+		return ValidationError{
+			Field:   "actions",
+			Message: "at least one action is required",
+		}
+	}
+	return nil
+}
+
+// validateResourceType validates the resource type
+func (s *PermissionService) validateResourceType(resourceType string) error {
+	if resourceType == "" {
+		return nil // Optional field
+	}
+	validTypes := map[string]bool{"general": true, "api": true, "document": true, "data": true}
+	if !validTypes[resourceType] {
+		return ValidationError{
+			Field:   "resource_type",
+			Message: "must be one of: general, api, document, data",
+		}
+	}
+	return nil
+}
+
+// UpdateAttribute updates an attribute by ID with validation
+func (s *PermissionService) UpdateAttribute(ctx context.Context, id int64, req model.UpdateAttributesRequest) (*model.Attributes, error) {
+	if err := s.validateID(id, "id"); err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		if err := s.validateName(*req.Name, "name"); err != nil {
+			return nil, err
+		}
+	}
+
+	if req.Type != nil {
+		if err := s.validateAttributeType(*req.Type); err != nil {
+			return nil, err
+		}
+		if *req.Type == "enum" {
+			if err := s.validateEnumValues(*req.Type, req.EnumValues); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	updated, err := s.repo.UpdateAttribute(ctx, id, &req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update attribute: %w", err)
+	}
+
+	return updated, nil
+}
+
+// UpdateResource updates a resource by ID with validation
+func (s *PermissionService) UpdateResource(ctx context.Context, id int64, req model.UpdateResourcesRequest) (*model.Resources, error) {
+	if err := s.validateID(id, "id"); err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		if err := s.validateName(*req.Name, "name"); err != nil {
+			return nil, err
+		}
+	}
+
+	if req.ResourceType != nil {
+		if err := s.validateResourceType(*req.ResourceType); err != nil {
+			return nil, err
+		}
+	}
+
+	updated, err := s.repo.UpdateResource(ctx, id, &req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update resource: %w", err)
+	}
+
+	return updated, nil
+}
+
+// UpdatePermission updates a permission by ID with validation
+func (s *PermissionService) UpdatePermission(ctx context.Context, id int64, req model.UpdatePermissionsRequest) (*model.Permissions, error) {
+	if err := s.validateID(id, "id"); err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		if err := s.validateName(*req.Name, "name"); err != nil {
+			return nil, err
+		}
+	}
+
+	if req.Effect != nil {
+		if err := s.validateEffect(*req.Effect); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(req.Actions) > 0 {
+		if err := s.validateActions(req.Actions); err != nil {
+			return nil, err
+		}
+	}
+
+	updated, err := s.repo.UpdatePermission(ctx, id, &req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update permission: %w", err)
+	}
+
+	return updated, nil
 }
