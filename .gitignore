@@ -1,62 +1,83 @@
-# claude specific ignores
-.claude
+# Claude specific
+.claude/
 
-# Binaries for programs and plugins
+#vscode settings
+.vscode/
+
+# Binaries
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-
-# Test binary, built with `go test -c`
 *.test
 
-# cerfificate ssl
-*.crt
-*.key
+# Build artifacts
+build/
+dist/
+bin/
 
-# Code coverage profiles and other test artifacts
+# Test artifacts
 *.out
 coverage.*
 *.coverprofile
 profile.cov
+test-results/
 
-#container file
-*.yml
-Dockerfile
-
-# JWT Keys - NEVER COMMIT PRIVATE KEYS
-keys/*.pem
-JWT_PRIVATE_KEY
-JWT_PUBLIC_KEY
-
-.env
-.env.local
-.DS_Store
-.md
-# Dependency directories (uncomment the following line to ignore vendor/ directory)
-# vendor/
-
-# Go workspace file
-go.work
-go.work.sum
-
-# Editor/IDE-specific files (optional, can also be added to a global gitignore)
-.idea/
-.vscode/
-
-# postgress data
-pgData
-
-# SSL/TLS Certificates
+# Security - NEVER COMMIT
 *.key
-*.crt
 *.pem
 *.p12
 *.pfx
 *.der
-*.cer
-
-# Keys directory
+*.crt
+JWT_PRIVATE_KEY
+JWT_PUBLIC_KEY
 keys/
-scripts
+scripts/
+.env
+.env.local
+.env.*.local
+
+# nginx - ignore only secrets/certs (configs should be tracked)
+nginx/ssl/*.key
+nginx/ssl/*.pem
+nginx/ssl/*.crt
+nginx/ssl/*.pfx
+nginx/ssl/*.der
+
+# Database (temporary dumps only)
+*.sql.dump
+*.sql.gz
+pgData/
+
+# Go workspace
+go.work
+go.work.sum
+
+# Editor/IDE
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & temp
+*.log
+*.tmp
+tmp/
+.cache/
+
+# Profiling
+*.pprof
+*.prof
+cpu.prof
+mem.prof
+
