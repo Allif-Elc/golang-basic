@@ -20,6 +20,7 @@ type ProjectServiceInterface interface {
 	DeleteProject(ctx context.Context, projectID int64) (map[string]int64, error)
 	GetAPIStats(ctx context.Context, projectID int64) (map[string]int64, error)
 	ListProjects(ctx context.Context, req model.ListProjectsRequest) (*model.PageResult[model.Project], error)
+	ListProjectsWithStats(ctx context.Context, req model.ListProjectsRequest) (*model.PageResult[model.ProjectWithStats], error)
 }
 
 type ProjectController struct {
@@ -179,6 +180,42 @@ func (c *ProjectController) ListProjects(w http.ResponseWriter, r *http.Request)
 	}
 
 	utility.SendSuccess(w, http.StatusOK, "Projects retrieved successfully", result)
+}
+
+// ListProjectsWithStats handles project listing with API statistics in a single optimized query
+// This endpoint should be used instead of ListProjects for better performance
+func (c *ProjectController) ListProjectsWithStats(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	req := model.ListProjectsRequest{
+		Page:      parseIntQuery(r, "page", 1),
+		Limit:     parseIntQuery(r, "limit", 10),
+		Search:    r.URL.Query().Get("search"),
+		SortBy:    r.URL.Query().Get("sort_by"),
+		SortOrder: r.URL.Query().Get("sort_order"),
+	}
+
+	// Parse optional boolean parameter
+	if isPublicStr := r.URL.Query().Get("is_public"); isPublicStr != "" {
+		if isPublic, err := strconv.ParseBool(isPublicStr); err == nil {
+			req.IsPublic = &isPublic
+		}
+	}
+
+	// Parse optional user ID parameter
+	if userIDStr := r.URL.Query().Get("id_user"); userIDStr != "" {
+		if userID, err := strconv.ParseInt(userIDStr, 10, 64); err == nil {
+			req.IDUser = &userID
+		}
+	}
+
+	// List projects with stats in single query
+	result, err := c.service.ListProjectsWithStats(r.Context(), req)
+	if err != nil {
+		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utility.SendSuccess(w, http.StatusOK, "Projects with stats retrieved successfully", result)
 }
 
 // parseIntQuery parses an integer query parameter with a default value

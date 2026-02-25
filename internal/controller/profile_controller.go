@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"golang-basic/api/internal/middleware"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -17,6 +19,7 @@ type ProfileServiceInterface interface {
 	UpdateProfile(ctx context.Context, req model.UpdateProfileRequest) (*model.Profile, error)
 	GetAllProfiles(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.Profile], error)
 	GetProfileByID(ctx context.Context, id int64) (model.Profile, error)
+	GetProfileByUserID(ctx context.Context, userID int64) (model.Profile, error)
 	DeleteProfile(ctx context.Context, profileId int64) error
 }
 
@@ -131,6 +134,48 @@ func (c *ProfileController) GetProfileByID(w http.ResponseWriter, r *http.Reques
 	profile, err := c.service.GetProfileByID(ctx, id)
 	if err != nil {
 		utility.SendError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	utility.SendSuccess(w, http.StatusOK, "Profile retrieved successfully", profile)
+}
+
+func (c *ProfileController) GetProfileByUserID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var userID int64
+	var err error
+
+	// Try to get userId from query parameter first
+	userIDStr := r.URL.Query().Get("userId")
+	if userIDStr != "" {
+		userID, err = strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			utility.SendError(w, http.StatusBadRequest, "Invalid user ID")
+			return
+		}
+	} else {
+		// Fallback to context (for backward compatibility - fix the key to use middleware.UserIDKey)
+		userIDValue := r.Context().Value(middleware.UserIDKey)
+		if userIDValue == nil {
+			utility.SendError(w, http.StatusUnauthorized, "User not authenticated")
+			return
+		}
+		var ok bool
+		userID, ok = userIDValue.(int64)
+		if !ok {
+			utility.SendError(w, http.StatusUnauthorized, "Invalid user ID")
+			return
+		}
+	}
+
+	ctx := r.Context()
+	profile, err := c.service.GetProfileByUserID(ctx, userID)
+	if err != nil {
+		utility.SendError(w, http.StatusNotFound, "Profile not found")
 		return
 	}
 

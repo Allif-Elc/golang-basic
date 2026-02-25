@@ -17,18 +17,21 @@ type PermissionServiceInterface interface {
 	CreateAttribute(ctx context.Context, req model.CreateAttributesRequest) (*model.Attributes, error)
 	GetAttributeByID(ctx context.Context, id int64) (*model.Attributes, error)
 	ListAttributes(ctx context.Context) ([]model.Attributes, error)
+	UpdateAttribute(ctx context.Context, id int64, req model.UpdateAttributesRequest) (*model.Attributes, error)
 	DeleteAttribute(ctx context.Context, id int64) error
 
 	// Resource operations
 	CreateResource(ctx context.Context, req model.CreateResoucesRequest) (*model.Resources, error)
 	GetResourceByID(ctx context.Context, id int64) (*model.Resources, error)
 	ListResources(ctx context.Context) ([]model.Resources, error)
+	UpdateResource(ctx context.Context, id int64, req model.UpdateResourcesRequest) (*model.Resources, error)
 	DeleteResource(ctx context.Context, id int64) error
 
 	// Permission operations
 	CreatePermission(ctx context.Context, req model.CreatePermissionsRequest) (*model.Permissions, error)
 	GetPermissionByID(ctx context.Context, id int64) (*model.Permissions, error)
 	ListPermissions(ctx context.Context) ([]model.Permissions, error)
+	UpdatePermission(ctx context.Context, id int64, req model.UpdatePermissionsRequest) (*model.Permissions, error)
 	DeletePermission(ctx context.Context, id int64) error
 }
 
@@ -106,6 +109,30 @@ func (c *PermissionController) DeleteAttribute(w http.ResponseWriter, r *http.Re
 	utility.SendSuccess(w, http.StatusOK, "Attribute deleted successfully", nil)
 }
 
+// UpdateAttribute handles PUT /attributes/{id}
+func (c *PermissionController) UpdateAttribute(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		utility.SendError(w, http.StatusBadRequest, "Invalid attribute ID")
+		return
+	}
+
+	var req model.UpdateAttributesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	attribute, err := c.service.UpdateAttribute(r.Context(), id, req)
+	if err != nil {
+		utility.SendError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	utility.SendSuccess(w, http.StatusOK, "Attribute updated successfully", attribute)
+}
+
 // ==================== Resource Handlers ====================
 
 // CreateResource handles POST /resources
@@ -172,6 +199,30 @@ func (c *PermissionController) DeleteResource(w http.ResponseWriter, r *http.Req
 	utility.SendSuccess(w, http.StatusOK, "Resource deleted successfully", nil)
 }
 
+// UpdateResource handles PUT /resources/{id}
+func (c *PermissionController) UpdateResource(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		utility.SendError(w, http.StatusBadRequest, "Invalid resource ID")
+		return
+	}
+
+	var req model.UpdateResourcesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	resource, err := c.service.UpdateResource(r.Context(), id, req)
+	if err != nil {
+		utility.SendError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	utility.SendSuccess(w, http.StatusOK, "Resource updated successfully", resource)
+}
+
 // ==================== Permission Handlers ====================
 
 // CreatePermission handles POST /permissions
@@ -236,4 +287,28 @@ func (c *PermissionController) DeletePermission(w http.ResponseWriter, r *http.R
 	}
 
 	utility.SendSuccess(w, http.StatusOK, "Permission deleted successfully", nil)
+}
+
+// UpdatePermission handles PUT /permissions/{id}
+func (c *PermissionController) UpdatePermission(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		utility.SendError(w, http.StatusBadRequest, "Invalid permission ID")
+		return
+	}
+
+	var req model.UpdatePermissionsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	permission, err := c.service.UpdatePermission(r.Context(), id, req)
+	if err != nil {
+		utility.SendError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	utility.SendSuccess(w, http.StatusOK, "Permission updated successfully", permission)
 }
