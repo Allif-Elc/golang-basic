@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"os"
 
 	"golang-basic/api/internal/config"
 	"golang-basic/api/internal/controller"
@@ -14,11 +15,27 @@ import (
 	"github.com/go-chi/cors"
 )
 
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 func SetupRoutes() *chi.Mux {
+	var minioController *controller.MinioController
+	if config.MinioClient != nil {
+		minioService := service.NewMinioService(config.MinioClient, getEnv("MINIO_BUCKET_NAME", "golang-basic"))
+		minioController = controller.NewMinioController(minioService)
+	}
+
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(config.DB)
 	profileRepo := repository.NewProfileRepository(config.DB)
 	authorizationRepo := repository.NewAuthorizationRepository(config.DB)
+	permissionRepo := repository.NewPermissionRepository(config.DB)
+	policyRepo := repository.NewPolicyRepository(config.DB)
+	userPolicyRepo := repository.NewUserPolicyRepository(config.DB)
 	projectRepo := repository.NewProjectRepository(config.DB)
 	restAPIRepo := repository.NewRestAPIRepository(config.DB)
 	graphqlAPIRepo := repository.NewGraphQLAPIRepository(config.DB)
@@ -29,6 +46,9 @@ func SetupRoutes() *chi.Mux {
 	userService := service.NewUserService(userRepo)
 	profileService := service.NewProfileService(profileRepo, userRepo)
 	authorizationService := service.NewAuthorizationService(authorizationRepo)
+	permissionService := service.NewPermissionService(permissionRepo)
+	policyService := service.NewPolicyService(policyRepo)
+	userPolicyService := service.NewUserPolicyService(userPolicyRepo, authorizationRepo)
 	projectService := service.NewProjectService(projectRepo)
 	restAPIService := service.NewRestAPIService(restAPIRepo, projectRepo)
 	graphqlAPIService := service.NewGraphQLAPIService(graphqlAPIRepo, projectRepo)
@@ -38,7 +58,9 @@ func SetupRoutes() *chi.Mux {
 	authController := controller.NewAuthController(authService)
 	userController := controller.NewUserController(userService)
 	profileController := controller.NewProfileController(profileService)
-	permissionController := controller.NewPermissionController(nil)
+	permissionController := controller.NewPermissionController(permissionService)
+	policyController := controller.NewPolicyController(policyService)
+	userPolicyController := controller.NewUserPolicyController(userPolicyService)
 	projectController := controller.NewProjectController(projectService)
 	restAPIController := controller.NewRestAPIController(restAPIService)
 	graphqlAPIController := controller.NewGraphQLAPIController(graphqlAPIService)
@@ -75,6 +97,11 @@ func SetupRoutes() *chi.Mux {
 		w.Write([]byte("OK"))
 	})
 
+	// ========== PROFILING ENDPOINTS ==========
+	// Mount pprof profiler at /debug for Go profiling
+	// Access at: http://localhost:3003/debug/
+	r.Mount("/debug", appmiddleware.Profiler())
+
 	// ========== AUTH ROUTES (PUBLIC) ==========
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.Post("/login", authController.Login)
@@ -102,6 +129,7 @@ func SetupRoutes() *chi.Mux {
 		r.Route("/profiles", func(r chi.Router) {
 			r.With(jwtMiddleware.OptionalAuth()).Get("/", profileController.GetAllProfiles)
 			r.With(jwtMiddleware.Authenticate()).Post("/", profileController.CreateProfile)
+			r.With(jwtMiddleware.Authenticate()).Get("/me", profileController.GetProfileByUserID)
 
 			r.Route("/{id}", func(r chi.Router) {
 				r.With(jwtMiddleware.OptionalAuth()).Get("/", profileController.GetProfileByID)
@@ -113,6 +141,8 @@ func SetupRoutes() *chi.Mux {
 		// ----- PROJECTS -----
 		r.Route("/projects", func(r chi.Router) {
 			r.With(jwtMiddleware.OptionalAuth()).Get("/", projectController.ListProjects)
+			// Optimized endpoint with API stats in single query (use this for better performance)
+			r.With(jwtMiddleware.OptionalAuth()).Get("/with-stats", projectController.ListProjectsWithStats)
 			r.With(jwtMiddleware.Authenticate(), authMiddleware.RequirePermission("projects", "write")).Post("/", projectController.CreateProject)
 
 			r.Route("/{id}", func(r chi.Router) {
@@ -174,6 +204,14 @@ func SetupRoutes() *chi.Mux {
 			})
 		})
 
+		// ----- MINIO (Object Storage) -----
+		if minioController != nil {
+			r.Route("/minio", func(r chi.Router) {
+				r.With(jwtMiddleware.Authenticate()).Get("/upload/{object}", minioController.GetUploadURL)
+				r.With(jwtMiddleware.Authenticate()).Get("/download/{object}", minioController.GetDownloadURL)
+			})
+		}
+
 		// ----- PERMISSIONS (Nested Routes) -----
 		r.Route("/permissions", func(r chi.Router) {
 			// Attributes
@@ -183,6 +221,7 @@ func SetupRoutes() *chi.Mux {
 
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", permissionController.GetAttributeByID)
+					r.Put("/", permissionController.UpdateAttribute)
 					r.Delete("/", permissionController.DeleteAttribute)
 				})
 			})
@@ -194,6 +233,7 @@ func SetupRoutes() *chi.Mux {
 
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", permissionController.GetResourceByID)
+					r.Put("/", permissionController.UpdateResource)
 					r.Delete("/", permissionController.DeleteResource)
 				})
 			})
@@ -205,8 +245,37 @@ func SetupRoutes() *chi.Mux {
 
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", permissionController.GetPermissionByID)
+					r.Put("/", permissionController.UpdatePermission)
 					r.Delete("/", permissionController.DeletePermission)
 				})
+			})
+
+			// Policies (Full CRUD)
+			r.Route("/policies", func(r chi.Router) {
+				r.Get("/", policyController.ListPolicies)
+				r.With(jwtMiddleware.Authenticate()).Post("/", policyController.CreatePolicy)
+
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", policyController.GetPolicyByID)
+					r.With(jwtMiddleware.Authenticate()).Put("/", policyController.UpdatePolicy)
+					r.With(jwtMiddleware.Authenticate()).Delete("/", policyController.DeletePolicy)
+				})
+			})
+
+			// User Policies (Priority-based policy overrides)
+			r.Route("/user-policies", func(r chi.Router) {
+				r.Get("/", userPolicyController.ListUserPolicies)
+				r.Get("/details", userPolicyController.ListUserPolicyDetails)
+				r.Post("/", userPolicyController.CreateUserPolicy)
+
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", userPolicyController.GetUserPolicyByID)
+					r.Put("/", userPolicyController.UpdateUserPolicy)
+					r.Delete("/", userPolicyController.DeleteUserPolicy)
+				})
+
+				// Get policies by user ID
+				r.Get("/user/{userId}", userPolicyController.GetUserPoliciesByUserID)
 			})
 		})
 	})
