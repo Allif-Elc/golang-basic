@@ -1,8 +1,22 @@
-# Running Application with Podman
+# Podman Deployment Guide
 
-This guide provides instructions for running the Golang Basic application using Podman.
+Complete guide for running the Golang Basic application using Podman containers.
 
 **Performance Budgets:** API p95 <100ms, DB queries <50ms p95, Container health <5s
+
+## Quick Start
+
+One-command setup for local development:
+```bash
+# Clone and setup
+podman-compose up -d && \
+sleep 5 && \
+podman-compose exec -T postgres psql -U postgres -d golang_basic < sql/abac_schema.sql && \
+podman-compose exec -T postgres psql -U postgres -d golang_basic < sql/api_docs_schema.sql
+
+# Verify health
+curl -k https://localhost:3003/health
+```
 
 ## Prerequisites
 
@@ -12,127 +26,95 @@ This guide provides instructions for running the Golang Basic application using 
 ## Environment Variables
 
 Create a `.env` file in the project root:
+
 ```env
+# Database
+DB_HOST=postgres
+DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=postgres
 DB_NAME=golang_basic
-DB_PORT=5432
 
-# JWT (generate secure keys for production)
-JWT_SECRET=your_jwt_secret_change_in_production
+# JWT RSA Keys (RS256 algorithm)
+# Generate new keys with:
+#   openssl genrsa -out private.pem 2048
+#   openssl rsa -in private.pem -pubout -out public.pem
+# Then convert to base64 single line:
+#   cat private.pem | tr -d '\n' > private_key.txt
+#   cat public.pem | tr -d '\n' > public_key.txt
+JWT_PRIVATE_KEY=your_base64_encoded_private_key_here
+JWT_PUBLIC_KEY=your_base64_encoded_public_key_here
+
+# MinIO Configuration
+MINIO_ENDPOINT=minio:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_BUCKET_NAME=golang-basic
+MINIO_USE_SSL=false
 ```
 
-## Option 1: Run Database Only
+## Deployment Options
 
-If you want to run only the PostgreSQL database (for local development where you run the Go app directly):
+### Option 1: Database Only (Local Development)
+
+Run only PostgreSQL for local Go development:
 
 ```bash
-# Start only the PostgreSQL container
+# Start PostgreSQL
 podman-compose up -d postgres
 
-# Check if the database is running
+# Check status
 podman-compose ps
 
-# View database logs
+# View logs
 podman-compose logs -f postgres
 
-# Stop the database
+# Stop
 podman-compose stop postgres
-
-# Remove the database container
-podman-compose down
 ```
 
-**Connect to the database from your local Go app:**
-The database will be available at `localhost:5432`.
+**Database connection:** `localhost:5432`
 
-## Database Migrations
+### Option 2: Full Stack (Containers)
 
-Run SQL migrations from `sql/` folder after starting the database:
-
-```bash
-# Start the database first
-podman-compose up -d postgres
-
-# Wait for database to be healthy
-podman-compose ps
-
-# Run ABAC schema
-podman-compose exec -T postgres psql -U apiproj -d api-doc < sql/abac_schema.sql
-
-# Run API docs schema
-podman-compose exec -T postgres psql -U apiproj -d api-doc < sql/api_docs_schema.sql
-
-# Verify tables were created
-podman-compose exec postgres psql -U postgres -d golang_basic -c "\dt"
-
-# Verify indexes
-podman-compose exec postgres psql -U postgres -d golang_basic -c "\di"
-```
-
-**Single migration command:**
-```bash
-# Run all migrations at once
-podman-compose up -d postgres && \
-sleep 5 && \
-podman-compose exec -T postgres psql -U postgres -d golang_basic < sql/abac_schema.sql && \
-podman-compose exec -T postgres psql -U postgres -d golang_basic < sql/api_docs_schema.sql
-```
-
-## Option 2: Run Database and Application
-
-To run both the PostgreSQL database and the Golang application in containers:
+Run all services including the application:
 
 ```bash
 # Build and start all services
 podman-compose up -d
 
-# Or build with --build flag to rebuild images
+# Rebuild with latest changes
 podman-compose up -d --build
 
-# Check running containers
+# Check status
 podman-compose ps
 
-# View logs for all services
+# View logs
 podman-compose logs -f
-
-# View logs for specific service
 podman-compose logs -f app
-podman-compose logs -f postgres
 
 # Stop all services
 podman-compose stop
 
-# Stop and remove all containers
-podman-compose down
-
-# Stop and remove all containers with volumes
+# Remove containers and volumes
 podman-compose down -v
 ```
 
-**Access the application:**
-- Application API: `https://localhost:3003` (with self-signed certificate)
-- Health check: `https://localhost:3003/api/v1/health`
+**Access points:**
+- API: `https://localhost:3003` (self-signed cert)
+- Health: `https://localhost:3003/health`
 - PostgreSQL: `localhost:5432`
+- MinIO Console: `http://localhost:9001`
 
-**Verify health status:**
-```bash
-# Check container health
-podman-compose ps
+### Option 3: Production Pods
 
-# Check application health endpoint
-curl -k https://localhost:3003/api/v1/health
-```
-
-## Option 3: Using Podman Pods (Production)
-
-For production, use a pod to share namespace between containers:
+For production, use a pod for shared namespace:
 
 ```bash
-# Create a pod with exposed ports
-podman pod create --name golang-basic-pod -p 3003:3003 -p 5432:5432
+# Create pod with exposed ports
+podman pod create --name golang-basic-pod -p 3003:3003 -p 5432:5432 -p 9000:9000
 
-# Run PostgreSQL in the pod
+# Run PostgreSQL in pod
 podman run --pod golang-basic-pod -d \
     --name golang-basic-postgres \
     -e POSTGRES_USER=postgres \
@@ -141,7 +123,7 @@ podman run --pod golang-basic-pod -d \
     -v ./pgData:/var/lib/postgresql/data:Z \
     postgres:17
 
-# Run application in the pod
+# Run application in pod
 podman run --pod golang-basic-pod -d \
     --name golang-basic-app \
     --restart unless-stopped \
@@ -152,113 +134,308 @@ podman run --pod golang-basic-pod -d \
     -e DB_NAME=golang_basic \
     localhost/golang-basic-app:latest
 
-# Stop pod and all containers
+# Stop and remove pod
 podman pod stop golang-basic-pod
-
-# Remove pod and all containers
 podman pod rm golang-basic-pod -f
+```
+
+## Database Migrations
+
+Run SQL migrations after starting the database:
+
+```bash
+# Single command for all migrations
+podman-compose up -d postgres && \
+sleep 5 && \
+podman-compose exec -T postgres psql -U postgres -d golang_basic < sql/abac_schema.sql && \
+podman-compose exec -T postgres psql -U postgres -d golang_basic < sql/api_docs_schema.sql
+
+# Verify tables
+podman-compose exec postgres psql -U postgres -d golang_basic -c "\dt"
+
+# Verify indexes
+podman-compose exec postgres psql -U postgres -d golang_basic -c "\di"
+```
+
+## Performance Monitoring
+
+### Go Profiling
+
+The application exposes pprof endpoints at `/debug`:
+
+```bash
+# CPU profile (30 seconds)
+curl http://localhost:3003/debug/pprof/profile?seconds=30 > cpu.prof
+go tool pprof -http=:8080 cpu.prof
+
+# Memory profile
+curl http://localhost:3003/debug/pprof/heap > heap.prof
+go tool pprof -http=:8080 heap.prof
+
+# Goroutine profile
+curl http://localhost:3003/debug/pprof/goroutine > goroutine.prof
+
+# Interactive profiling
+go tool pprof http://localhost:3003/debug/pprof/profile
+```
+
+### Database Monitoring
+
+```sql
+-- Enable pg_stat_statements (run once)
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+-- Slow queries (top 10 by mean time)
+SELECT query, calls, mean_time, total_time
+FROM pg_stat_statements
+ORDER BY mean_time DESC
+LIMIT 10;
+
+-- Index usage (find unused indexes)
+SELECT indexname, idx_scan
+FROM pg_stat_user_indexes
+ORDER BY idx_scan ASC;
+
+-- Connection pool status
+SELECT count(*), state
+FROM pg_stat_activity
+GROUP BY state;
+
+-- Table bloat analysis
+SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
+FROM pg_tables
+WHERE schemaname = 'public'
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+```
+
+### Container Resource Monitoring
+
+```bash
+# Real-time resource usage
+podman stats
+
+# Container-specific stats
+podman stats golang-basic-app golang-basic-postgres
+
+# Health check status
+podman inspect golang-basic-app | grep -A 10 Health
+```
+
+## Nginx Reverse Proxy
+
+The Nginx container provides rate limiting, caching, and SSL termination.
+
+**Configuration:** `nginx/nginx.conf`
+
+### Rate Limits
+
+| Zone | Rate | Burst | Applied To |
+|------|------|-------|------------|
+| `api_limit` | 10 req/s | 20 | `/api/*` |
+| `login_limit` | 5 req/s | - | `/api/v1/auth/login` |
+
+### Caching
+
+```nginx
+# API cache: 1 minute for 200 responses
+proxy_cache_path /var/cache/nginx/api keys_zone=api_cache:10m;
+
+# Static cache: 24 hours
+proxy_cache_path /var/cache/nginx/static keys_zone=static_cache:10m;
+```
+
+### SSL/TLS
+
+- Protocols: TLSv1.2, TLSv1.3
+- HTTP/2 enabled
+- Self-signed certs (replace in production)
+- HSTS header enabled
+
+### Nginx Commands
+
+```bash
+# Test configuration
+podman-compose exec nginx nginx -t
+
+# Reload config (no downtime)
+podman-compose exec nginx nginx -s reload
+
+# View access logs
+podman-compose logs -f nginx
+
+# Cache statistics
+podman-compose exec nginx ls -lh /var/cache/nginx/
 ```
 
 ## Useful Commands
 
-### Rebuild the application
+### Application
+
 ```bash
+# Rebuild application
 podman-compose build app
 podman-compose up -d app
+
+# Access application shell
+podman-compose exec app sh
+
+# View application logs
+podman-compose logs -f app
 ```
 
-### Execute commands inside containers
+### Database
+
 ```bash
 # Access PostgreSQL CLI
 podman-compose exec postgres psql -U postgres -d golang_basic
 
-# Access application container shell
-podman-compose exec app sh
+# Run single query
+podman-compose exec postgres psql -U postgres -d golang_basic -c "SELECT version();"
+
+# Database backup
+podman-compose exec postgres pg_dump -U postgres golang_basic > backup.sql
+
+# Restore from backup
+podman-compose exec -T postgres psql -U postgres golang_basic < backup.sql
 ```
 
-### View container resource usage
+### Maintenance
+
 ```bash
+# View container resource usage
 podman stats
-```
-
-### Clean up everything
-```bash
-# Remove all containers, networks, and volumes
-podman-compose down -v
 
 # Remove unused images
 podman image prune -a
+
+# Clean up everything
+podman-compose down -v
+podman volume prune
 ```
 
 ## Troubleshooting
 
-### Database connection issues
-- Ensure the database container is healthy: `podman-compose ps`
-- Check database logs: `podman-compose logs postgres`
-- Verify environment variables are set correctly in `.env`
-- Test database connection: `podman-compose exec postgres psql -U postgres -d golang_basic -c "SELECT 1;"`
+### Database Connection Issues
 
-### Application not starting
-- Check if database is ready: `podman-compose logs postgres`
-- Rebuild the application: `podman-compose up -d --build`
-- Check application logs: `podman-compose logs app`
-- Verify healthcheck: `curl -k https://localhost:3003/api/v1/health`
-
-### Container permission issues (non-root user)
-The application runs as non-root user (UID 1001). If you encounter permission issues:
 ```bash
-# Fix volume permissions for database
+# Check database health
+podman-compose ps
+podman-compose logs postgres
+
+# Test connection
+podman-compose exec postgres psql -U postgres -d golang_basic -c "SELECT 1;"
+
+# Check network
+podman network inspect golang-basic_golang-basic-network
+```
+
+### Application Not Starting
+
+```bash
+# Check if database is ready
+podman-compose logs postgres
+
+# Rebuild application
+podman-compose up -d --build
+
+# Check application logs
+podman-compose logs app
+
+# Verify health endpoint
+curl -k https://localhost:3003/health
+```
+
+### Performance Issues
+
+```bash
+# Check container resources
+podman stats
+
+# Profile CPU (30 seconds)
+curl http://localhost:3003/debug/pprof/profile?seconds=30 > cpu.prof
+go tool pprof -http=:8080 cpu.prof
+
+# Check slow queries
+podman-compose exec postgres psql -U postgres -d golang_basic -c "
+SELECT query, calls, mean_time
+FROM pg_stat_statements
+ORDER BY mean_time DESC
+LIMIT 10;"
+```
+
+### Permission Issues
+
+The application runs as non-root user (UID 1001). Fix volume permissions:
+
+```bash
+# Fix database permissions
 podman-compose exec postgres chown -R 1001:1001 /var/lib/postgresql/data
 ```
 
-### Healthcheck failing
-- Check if health endpoint exists: `curl -k https://localhost:3003/api/v1/health`
-- Verify container is running: `podman-compose ps`
-- Check application logs for errors: `podman-compose logs app`
-- Inspect healthcheck status: `podman inspect golang-basic-app | grep -A 10 Health`
+### Port Conflicts
 
-### Port conflicts
-If ports 3003 or 5432 are already in use, modify the port mappings in `docker-compose.yml`:
+If ports are in use, modify mappings in `docker-compose.yml`:
+
 ```yaml
 ports:
   - "3004:3003"  # Change host port to 3004
 ```
 
-### Performance verification
-```bash
-# Check container resource usage
-podman stats
+## Production Security
 
-# Verify database query performance
-podman-compose exec postgres psql -U postgres -d golang_basic -c "EXPLAIN ANALYZE SELECT * FROM projects LIMIT 10;"
+### Container Hardening (Per CLAUDE.md)
 
-# Check connection pool status
-podman-compose exec postgres psql -U postgres -d golang_basic -c "SELECT count(*), state FROM pg_stat_activity GROUP BY state;"
+```yaml
+# Add to docker-compose.yml for production
+cap_drop:
+  - ALL
+cap_add:
+  - NET_BIND_SERVICE
+read_only: true
+tmpfs:
+  - /tmp
+security_opt:
+  - no-new-privileges
 ```
 
-## Security Considerations
+### Database Security
 
-**Container Security:**
-- Non-root user (UID 1001) - aligned with CLAUDE.md
-- Read-only root filesystem (add to docker-compose if needed): `read_only: true`
-- Drop all capabilities (add to docker-compose): `cap_drop: [ALL]`
-- Resource limits enforced (CPU, memory)
-
-**Database Security:**
 - SCRAM-SHA-256 authentication enforced
-- Separate user per application (recommended for production)
+- Separate user per application
 - Network isolation via bridge network
-- Volume mounted with `:Z` for SELinux contexts
+- Volume mounted with `:Z` for SELinux
+
+### Network Security
+
+- All services on internal bridge network
+- Only Nginx exposes ports (80/443)
+- Database not accessible from outside
+- Rate limiting on all public endpoints
 
 ## Production Checklist
 
 - [ ] Change default passwords in `.env`
-- [ ] Generate strong JWT secret
+- [ ] Generate strong RSA keys for JWT
+- [ ] Replace self-signed SSL certificates
 - [ ] Enable TLS/SSL for database connections
-- [ ] Set up database backups
+- [ ] Set up automated database backups
 - [ ] Configure log aggregation
-- [ ] Set up monitoring (pprof, pg_stat_statements)
+- [ ] Enable pprof monitoring (limit access in production)
+- [ ] Enable pg_stat_statements extension
 - [ ] Review and adjust resource limits
-- [ ] Enable rate limiting (Nginx)
-- [ ] Configure MinIO for file storage
-- [ ] Set up CI/CD pipeline
+- [ ] Set up MinIO backups
+- [ ] Configure CI/CD pipeline
+- [ ] Set up health check alerts
+- [ ] Configure firewall rules
+- [ ] Enable security scanning in CI/CD
+
+## Port Reference
+
+| Service | Internal Port | External Port |
+|---------|---------------|---------------|
+| Go API | 3003 | 3003 |
+| PostgreSQL | 5432 | 5432 |
+| Nginx HTTP | 80 | 80 |
+| Nginx HTTPS | 443 | 443 |
+| MinIO API | 9000 | 9000 |
+| MinIO Console | 9001 | 9001 |
