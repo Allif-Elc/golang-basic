@@ -95,7 +95,7 @@ func (r *AuthorizationRepository) GetMatchingPolicies(ctx context.Context, resou
 	}
 	defer rows.Close()
 
-	var policies []model.Policy
+	policies := make([]model.Policy, 0)
 	for rows.Next() {
 		var p model.Policy
 		if err := rows.Scan(&p.PolicyId, &p.Name, &p.PolicyRule, &p.IsActive, &p.CreatedAt, &p.UpdatedAt); err != nil {
@@ -153,4 +153,91 @@ func (r *AuthorizationRepository) PrepareStatements(ctx context.Context) error {
 	// pgxpool handles statement preparation internally
 	// This method is kept for API compatibility but does nothing
 	return nil
+}
+
+// GetUserPoliciesByUserID fetches user-specific policies with priority
+// Returns policies that are: active, not expired, and assigned to the user
+// Used by authorization service to get higher-priority user policies before role-based policies
+// Performance: <10ms with proper indexes
+// Required indexes:
+//
+//	CREATE INDEX idx_user_policies_user_active_expires ON user_policies(id_user, is_active, expires_at)
+//	    WHERE is_active = true;
+//	CREATE INDEX idx_policies_active ON policies USING GIN (policy_rule)
+//	    WHERE is_active = true;
+func (r *AuthorizationRepository) GetUserPoliciesByUserID(ctx context.Context, userID int64) ([]model.PolicyWithPriority, error) {
+	query := `
+		SELECT p.id_policy, p.name, p.policy_rule, p.is_active, p.created_at, p.updated_at,
+		       up.priority
+		FROM user_policies up
+		INNER JOIN policies p ON up.id_policy = p.id_policy
+		WHERE up.id_user = $1
+		  AND up.is_active = true
+		  AND p.is_active = true
+		  AND (up.expires_at IS NULL OR up.expires_at > CURRENT_TIMESTAMP)
+		ORDER BY up.priority DESC
+	`
+
+	rows, err := r.db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user policies: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]model.PolicyWithPriority, 0)
+	for rows.Next() {
+		var p model.Policy
+		var priority int
+		if err := rows.Scan(
+			&p.PolicyId,
+			&p.Name,
+			&p.PolicyRule,
+			&p.IsActive,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+			&priority,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan user policy: %w", err)
+		}
+		result = append(result, model.PolicyWithPriority{Policy: p, Priority: priority})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating user policies: %w", err)
+	}
+
+	return result, nil
+}
+
+// ListPolicies retrieves all policies from the database
+// Required indexes:
+//
+//	CREATE INDEX idx_policies_active ON policies(is_active);
+func (r *AuthorizationRepository) ListPolicies(ctx context.Context) ([]model.Policy, error) {
+	query := `
+		SELECT id_policy, name, policy_rule, is_active, created_at, updated_at
+		FROM policies
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query policies: %w", err)
+	}
+	defer rows.Close()
+
+	policies := make([]model.Policy, 0)
+	for rows.Next() {
+		var p model.Policy
+		if err := rows.Scan(&p.PolicyId, &p.Name, &p.PolicyRule, &p.IsActive, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan policy: %w", err)
+		}
+		policies = append(policies, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating policies: %w", err)
+	}
+
+	return policies, nil
 }

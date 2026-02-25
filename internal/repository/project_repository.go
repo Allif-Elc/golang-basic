@@ -352,6 +352,154 @@ func (r *ProjectRepository) FindAll(ctx context.Context, req model.ListProjectsR
 	return result, nil
 }
 
+// FindAllWithStats retrieves all projects with API statistics in a single query using LATERAL JOIN
+// This eliminates N+1 queries by fetching API counts along with project data
+func (r *ProjectRepository) FindAllWithStats(ctx context.Context, req model.ListProjectsRequest) (*model.PageResult[model.ProjectWithStats], error) {
+	// Validate pagination parameters
+	if req.Page < 1 {
+		req.Page = 1
+	}
+	if req.Limit < 1 || req.Limit > 100 {
+		req.Limit = 10
+	}
+
+	// Calculate offset
+	offset := (req.Page - 1) * req.Limit
+
+	var whereBuilder strings.Builder
+	whereBuilder.WriteString("WHERE 1=1")
+	args := []interface{}{}
+	argNum := 1
+
+	if req.IDUser != nil {
+		whereBuilder.WriteString(fmt.Sprintf(" AND p.id_user = $%d", argNum))
+		args = append(args, *req.IDUser)
+		argNum++
+	}
+
+	if req.IsPublic != nil {
+		whereBuilder.WriteString(fmt.Sprintf(" AND p.is_public = $%d", argNum))
+		args = append(args, *req.IsPublic)
+		argNum++
+	}
+
+	if req.Search != "" {
+		whereBuilder.WriteString(fmt.Sprintf(" AND (p.name ILIKE $%d OR p.description ILIKE $%d)", argNum, argNum+1))
+		searchPattern := "%" + req.Search + "%"
+		args = append(args, searchPattern, searchPattern)
+		argNum += 2
+	}
+	whereClause := whereBuilder.String()
+
+	var orderByBuilder strings.Builder
+	orderByBuilder.WriteString("p.created_at")
+	if req.SortBy != "" {
+		validSortFields := map[string]string{
+			"name":       "p.name",
+			"created_at": "p.created_at",
+			"updated_at": "p.updated_at",
+		}
+		if field, ok := validSortFields[req.SortBy]; ok {
+			orderByBuilder.Reset()
+			orderByBuilder.WriteString(field)
+			if req.SortOrder == "asc" || req.SortOrder == "desc" {
+				orderByBuilder.WriteString(" ")
+				orderByBuilder.WriteString(strings.ToUpper(req.SortOrder))
+			} else {
+				orderByBuilder.WriteString(" DESC")
+			}
+		}
+	}
+	orderBy := orderByBuilder.String()
+
+	// Main query with LATERAL JOINs for API stats - single round-trip
+	query := fmt.Sprintf(`
+		SELECT
+			p.id_project, p.id_user, p.name, p.slug, p.description, p.version, p.is_public,
+			p.created_at, p.updated_at,
+			COALESCE(ra.rest_count, 0) as rest_count,
+			COALESCE(ga.graphql_count, 0) as graphql_count,
+			COALESCE(gr.grpc_count, 0) as grpc_count
+		FROM projects p
+		LEFT JOIN LATERAL (
+			SELECT COUNT(*) as rest_count
+			FROM rest_apis
+			WHERE id_project = p.id_project
+		) ra ON true
+		LEFT JOIN LATERAL (
+			SELECT COUNT(*) as graphql_count
+			FROM graphql_apis
+			WHERE id_project = p.id_project
+		) ga ON true
+		LEFT JOIN LATERAL (
+			SELECT COUNT(*) as grpc_count
+			FROM grpc_apis
+			WHERE id_project = p.id_project
+		) gr ON true
+		%s
+		ORDER BY %s
+		LIMIT $%d OFFSET $%d
+	`, whereClause, orderBy, argNum, argNum+1)
+
+	args = append(args, req.Limit, offset)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query projects with stats: %w", err)
+	}
+	defer rows.Close()
+
+	var projects []model.ProjectWithStats
+	for rows.Next() {
+		var pws model.ProjectWithStats
+		err := rows.Scan(
+			&pws.IDProject,
+			&pws.IDUser,
+			&pws.Name,
+			&pws.Slug,
+			&pws.Description,
+			&pws.Version,
+			&pws.IsPublic,
+			&pws.CreatedAt,
+			&pws.UpdatedAt,
+			&pws.RestCount,
+			&pws.GraphQLCount,
+			&pws.GrpcCount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan project with stats: %w", err)
+		}
+		pws.TotalAPICount = pws.RestCount + pws.GraphQLCount + pws.GrpcCount
+		projects = append(projects, pws)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("error iterating projects with stats: %w", rows.Err())
+	}
+
+	// Get total count for pagination
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM projects p %s", whereClause)
+	var totalCount int64
+	if argNum > 2 {
+		err = r.db.QueryRow(ctx, countQuery, args[:argNum-2]...).Scan(&totalCount)
+	} else {
+		err = r.db.QueryRow(ctx, countQuery).Scan(&totalCount)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to count projects: %w", err)
+	}
+
+	result := &model.PageResult[model.ProjectWithStats]{
+		Data:     projects,
+		Page:     req.Page,
+		Size:     req.Limit,
+		StartRow: offset + 1,
+		EndRow:   offset + len(projects),
+	}
+
+	return result, nil
+}
+
 // generateSlug creates a URL-friendly slug from a project name
 func generateSlug(name string) string {
 	// Convert to lowercase

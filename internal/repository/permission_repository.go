@@ -17,53 +17,74 @@ func NewPermissionRepository(db *pgxpool.Pool) *PermissionRepository {
 }
 
 func (r *PermissionRepository) CreateAttributes(ctx context.Context, attribute *model.CreateAttributesRequest) (*model.Attributes, error) {
-	query := `INSERT into attributes (name, description) VALUES ($1, $2) RETURNING id_attribute, created_at`
+	query := `INSERT INTO attributes (name, description, type, enum_values) VALUES ($1, $2, $3, $4) RETURNING id_attribute, created_at, updated_at`
 	var createdAttribute model.Attributes
-	err := r.db.QueryRow(ctx, query, attribute.Name, attribute.Description).Scan(&createdAttribute.AttributeID, &createdAttribute.CreateAt)
+	err := r.db.QueryRow(ctx, query, attribute.Name, attribute.Description, attribute.Type, attribute.EnumValues).Scan(
+		&createdAttribute.AttributeID,
+		&createdAttribute.CreatedAt,
+		&createdAttribute.UpdatedAt,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	createdAttribute.Name = attribute.Name
 	createdAttribute.Description = attribute.Description
+	createdAttribute.Type = attribute.Type
+	createdAttribute.EnumValues = attribute.EnumValues
 	return &createdAttribute, nil
 }
 
 func (r *PermissionRepository) CreateResoucesRequest(ctx context.Context, resource *model.CreateResoucesRequest) (*model.Resources, error) {
-	query := `INSERT into resources (name, description) VALUES ($1, $2) RETURNING id_resource, created_at`
-	var createdResouce model.Resources
-	err := r.db.QueryRow(ctx, query, resource.Name, resource.Description).Scan(&createdResouce.ResourceID, &createdResouce.CreateAt)
+	query := `INSERT INTO resources (name, description, resource_type) VALUES ($1, $2, $3) RETURNING id_resource, created_at, updated_at`
+	var createdResource model.Resources
+	err := r.db.QueryRow(ctx, query, resource.Name, resource.Description, resource.ResourceType).Scan(
+		&createdResource.ResourceID,
+		&createdResource.CreatedAt,
+		&createdResource.UpdatedAt,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	createdResouce.Name = resource.Name
-	createdResouce.Description = resource.Description
-	return &createdResouce, nil
+	createdResource.Name = resource.Name
+	createdResource.Description = resource.Description
+	createdResource.ResourceType = resource.ResourceType
+	return &createdResource, nil
 }
 
 func (r *PermissionRepository) CreatePermissionsRequest(ctx context.Context, permission *model.CreatePermissionsRequest) (*model.Permissions, error) {
-	query := `INSERT into permissions (name, description) VALUES ($1, $2) RETURNING id_permission`
+	query := `INSERT INTO permissions (name, description, effect, actions, condition) VALUES ($1, $2, $3, $4, $5) RETURNING id_permission, created_at, updated_at`
 	var createdPermission model.Permissions
-	err := r.db.QueryRow(ctx, query, permission.Name, permission.Description).Scan(&createdPermission.PermissionID)
+	err := r.db.QueryRow(ctx, query, permission.Name, permission.Description, permission.Effect, permission.Actions, permission.Condition).Scan(
+		&createdPermission.PermissionID,
+		&createdPermission.CreatedAt,
+		&createdPermission.UpdatedAt,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	createdPermission.Name = permission.Name
 	createdPermission.Description = permission.Description
+	createdPermission.Effect = permission.Effect
+	createdPermission.Actions = permission.Actions
+	createdPermission.Condition = permission.Condition
 	return &createdPermission, nil
 }
 
 // GetAttributeByID retrieves an attribute by its ID
 func (r *PermissionRepository) GetAttributeByID(ctx context.Context, id int64) (*model.Attributes, error) {
-	query := `SELECT id_attribute, name, description, created_at FROM attributes WHERE id_attribute = $1`
+	query := `SELECT id_attribute, name, description, type, enum_values, created_at, updated_at FROM attributes WHERE id_attribute = $1`
 	var attribute model.Attributes
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&attribute.AttributeID,
 		&attribute.Name,
 		&attribute.Description,
-		&attribute.CreateAt,
+		&attribute.Type,
+		&attribute.EnumValues,
+		&attribute.CreatedAt,
+		&attribute.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -75,13 +96,16 @@ func (r *PermissionRepository) GetAttributeByID(ctx context.Context, id int64) (
 // Required indexes:
 //   CREATE UNIQUE INDEX idx_attributes_name ON attributes(name);
 func (r *PermissionRepository) GetAttributeByName(ctx context.Context, name string) (*model.Attributes, error) {
-	query := `SELECT id_attribute, name, description, created_at FROM attributes WHERE name = $1`
+	query := `SELECT id_attribute, name, description, type, enum_values, created_at, updated_at FROM attributes WHERE name = $1`
 	var attribute model.Attributes
 	err := r.db.QueryRow(ctx, query, name).Scan(
 		&attribute.AttributeID,
 		&attribute.Name,
 		&attribute.Description,
-		&attribute.CreateAt,
+		&attribute.Type,
+		&attribute.EnumValues,
+		&attribute.CreatedAt,
+		&attribute.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -93,7 +117,7 @@ func (r *PermissionRepository) GetAttributeByName(ctx context.Context, name stri
 // Required indexes:
 //   CREATE INDEX idx_attributes_id ON attributes(id_attribute);
 func (r *PermissionRepository) ListAttributes(ctx context.Context) ([]model.Attributes, error) {
-	query := `SELECT id_attribute, name, description, created_at FROM attributes ORDER BY id_attribute`
+	query := `SELECT id_attribute, name, description, type, enum_values, created_at, updated_at FROM attributes ORDER BY id_attribute`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		return nil, err
@@ -107,7 +131,10 @@ func (r *PermissionRepository) ListAttributes(ctx context.Context) ([]model.Attr
 			&attribute.AttributeID,
 			&attribute.Name,
 			&attribute.Description,
-			&attribute.CreateAt,
+			&attribute.Type,
+			&attribute.EnumValues,
+			&attribute.CreatedAt,
+			&attribute.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -136,13 +163,15 @@ func (r *PermissionRepository) DeleteAttribute(ctx context.Context, id int64) er
 
 // GetResourceByID retrieves a resource by its ID
 func (r *PermissionRepository) GetResourceByID(ctx context.Context, id int64) (*model.Resources, error) {
-	query := `SELECT id_resource, name, description, created_at FROM resources WHERE id_resource = $1`
+	query := `SELECT id_resource, name, description, resource_type, created_at, updated_at FROM resources WHERE id_resource = $1`
 	var resource model.Resources
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&resource.ResourceID,
 		&resource.Name,
 		&resource.Description,
-		&resource.CreateAt,
+		&resource.ResourceType,
+		&resource.CreatedAt,
+		&resource.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -154,13 +183,15 @@ func (r *PermissionRepository) GetResourceByID(ctx context.Context, id int64) (*
 // Required indexes:
 //   CREATE UNIQUE INDEX idx_resources_name ON resources(name);
 func (r *PermissionRepository) GetResourceByName(ctx context.Context, name string) (*model.Resources, error) {
-	query := `SELECT id_resource, name, description, created_at FROM resources WHERE name = $1`
+	query := `SELECT id_resource, name, description, resource_type, created_at, updated_at FROM resources WHERE name = $1`
 	var resource model.Resources
 	err := r.db.QueryRow(ctx, query, name).Scan(
 		&resource.ResourceID,
 		&resource.Name,
 		&resource.Description,
-		&resource.CreateAt,
+		&resource.ResourceType,
+		&resource.CreatedAt,
+		&resource.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -172,7 +203,7 @@ func (r *PermissionRepository) GetResourceByName(ctx context.Context, name strin
 // Required indexes:
 //   CREATE INDEX idx_resources_id ON resources(id_resource);
 func (r *PermissionRepository) ListResources(ctx context.Context) ([]model.Resources, error) {
-	query := `SELECT id_resource, name, description, created_at FROM resources ORDER BY id_resource`
+	query := `SELECT id_resource, name, description, resource_type, created_at, updated_at FROM resources ORDER BY id_resource`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		return nil, err
@@ -186,7 +217,9 @@ func (r *PermissionRepository) ListResources(ctx context.Context) ([]model.Resou
 			&resource.ResourceID,
 			&resource.Name,
 			&resource.Description,
-			&resource.CreateAt,
+			&resource.ResourceType,
+			&resource.CreatedAt,
+			&resource.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -215,13 +248,17 @@ func (r *PermissionRepository) DeleteResource(ctx context.Context, id int64) err
 
 // GetPermissionByID retrieves a permission by its ID
 func (r *PermissionRepository) GetPermissionByID(ctx context.Context, id int64) (*model.Permissions, error) {
-	query := `SELECT id_permission, name, description, created_at FROM permissions WHERE id_permission = $1`
+	query := `SELECT id_permission, name, description, effect, actions, condition, created_at, updated_at FROM permissions WHERE id_permission = $1`
 	var permission model.Permissions
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&permission.PermissionID,
 		&permission.Name,
 		&permission.Description,
-		&permission.CreateAt,
+		&permission.Effect,
+		&permission.Actions,
+		&permission.Condition,
+		&permission.CreatedAt,
+		&permission.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -233,13 +270,17 @@ func (r *PermissionRepository) GetPermissionByID(ctx context.Context, id int64) 
 // Required indexes:
 //   CREATE UNIQUE INDEX idx_permissions_name ON permissions(name);
 func (r *PermissionRepository) GetPermissionByName(ctx context.Context, name string) (*model.Permissions, error) {
-	query := `SELECT id_permission, name, description, created_at FROM permissions WHERE name = $1`
+	query := `SELECT id_permission, name, description, effect, actions, condition, created_at, updated_at FROM permissions WHERE name = $1`
 	var permission model.Permissions
 	err := r.db.QueryRow(ctx, query, name).Scan(
 		&permission.PermissionID,
 		&permission.Name,
 		&permission.Description,
-		&permission.CreateAt,
+		&permission.Effect,
+		&permission.Actions,
+		&permission.Condition,
+		&permission.CreatedAt,
+		&permission.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -251,7 +292,7 @@ func (r *PermissionRepository) GetPermissionByName(ctx context.Context, name str
 // Required indexes:
 //   CREATE INDEX idx_permissions_id ON permissions(id_permission);
 func (r *PermissionRepository) ListPermissions(ctx context.Context) ([]model.Permissions, error) {
-	query := `SELECT id_permission, name, description, created_at FROM permissions ORDER BY id_permission`
+	query := `SELECT id_permission, name, description, effect, actions, condition, created_at, updated_at FROM permissions ORDER BY id_permission`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		return nil, err
@@ -265,7 +306,11 @@ func (r *PermissionRepository) ListPermissions(ctx context.Context) ([]model.Per
 			&permission.PermissionID,
 			&permission.Name,
 			&permission.Description,
-			&permission.CreateAt,
+			&permission.Effect,
+			&permission.Actions,
+			&permission.Condition,
+			&permission.CreatedAt,
+			&permission.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -290,4 +335,88 @@ func (r *PermissionRepository) DeletePermission(ctx context.Context, id int64) e
 	}
 
 	return nil
+}
+
+// UpdateAttribute updates an attribute by ID
+func (r *PermissionRepository) UpdateAttribute(ctx context.Context, id int64, req *model.UpdateAttributesRequest) (*model.Attributes, error) {
+	query := `
+		UPDATE attributes
+		SET name = COALESCE($1, name),
+		    description = COALESCE($2, description),
+		    type = COALESCE($3, type),
+		    enum_values = COALESCE($4, enum_values),
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id_attribute = $5
+		RETURNING id_attribute, name, description, type, enum_values, created_at, updated_at
+	`
+	var updated model.Attributes
+	err := r.db.QueryRow(ctx, query, req.Name, req.Description, req.Type, req.EnumValues, id).Scan(
+		&updated.AttributeID,
+		&updated.Name,
+		&updated.Description,
+		&updated.Type,
+		&updated.EnumValues,
+		&updated.CreatedAt,
+		&updated.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
+}
+
+// UpdateResource updates a resource by ID
+func (r *PermissionRepository) UpdateResource(ctx context.Context, id int64, req *model.UpdateResourcesRequest) (*model.Resources, error) {
+	query := `
+		UPDATE resources
+		SET name = COALESCE($1, name),
+		    description = COALESCE($2, description),
+		    resource_type = COALESCE($3, resource_type),
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id_resource = $4
+		RETURNING id_resource, name, description, resource_type, created_at, updated_at
+	`
+	var updated model.Resources
+	err := r.db.QueryRow(ctx, query, req.Name, req.Description, req.ResourceType, id).Scan(
+		&updated.ResourceID,
+		&updated.Name,
+		&updated.Description,
+		&updated.ResourceType,
+		&updated.CreatedAt,
+		&updated.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
+}
+
+// UpdatePermission updates a permission by ID
+func (r *PermissionRepository) UpdatePermission(ctx context.Context, id int64, req *model.UpdatePermissionsRequest) (*model.Permissions, error) {
+	query := `
+		UPDATE permissions
+		SET name = COALESCE($1, name),
+		    description = COALESCE($2, description),
+		    effect = COALESCE($3, effect),
+		    actions = COALESCE($4, actions),
+		    condition = COALESCE($5, condition),
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id_permission = $6
+		RETURNING id_permission, name, description, effect, actions, condition, created_at, updated_at
+	`
+	var updated model.Permissions
+	err := r.db.QueryRow(ctx, query, req.Name, req.Description, req.Effect, req.Actions, req.Condition, id).Scan(
+		&updated.PermissionID,
+		&updated.Name,
+		&updated.Description,
+		&updated.Effect,
+		&updated.Actions,
+		&updated.Condition,
+		&updated.CreatedAt,
+		&updated.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
 }
