@@ -20,18 +20,21 @@ type MockPermissionService struct {
 	CreateAttributeFunc  func(ctx context.Context, req model.CreateAttributesRequest) (*model.Attributes, error)
 	GetAttributeByIDFunc func(ctx context.Context, id int64) (*model.Attributes, error)
 	ListAttributesFunc   func(ctx context.Context) ([]model.Attributes, error)
+	UpdateAttributeFunc  func(ctx context.Context, id int64, req model.UpdateAttributesRequest) (*model.Attributes, error)
 	DeleteAttributeFunc  func(ctx context.Context, id int64) error
 
 	// Resource mocks
 	CreateResourceFunc  func(ctx context.Context, req model.CreateResoucesRequest) (*model.Resources, error)
 	GetResourceByIDFunc func(ctx context.Context, id int64) (*model.Resources, error)
 	ListResourcesFunc   func(ctx context.Context) ([]model.Resources, error)
+	UpdateResourceFunc  func(ctx context.Context, id int64, req model.UpdateResourcesRequest) (*model.Resources, error)
 	DeleteResourceFunc  func(ctx context.Context, id int64) error
 
 	// Permission mocks
 	CreatePermissionFunc  func(ctx context.Context, req model.CreatePermissionsRequest) (*model.Permissions, error)
 	GetPermissionByIDFunc func(ctx context.Context, id int64) (*model.Permissions, error)
 	ListPermissionsFunc   func(ctx context.Context) ([]model.Permissions, error)
+	UpdatePermissionFunc  func(ctx context.Context, id int64, req model.UpdatePermissionsRequest) (*model.Permissions, error)
 	DeletePermissionFunc  func(ctx context.Context, id int64) error
 }
 
@@ -64,6 +67,20 @@ func (m *MockPermissionService) DeleteAttribute(ctx context.Context, id int64) e
 	return nil
 }
 
+func (m *MockPermissionService) UpdateAttribute(ctx context.Context, id int64, req model.UpdateAttributesRequest) (*model.Attributes, error) {
+	if m.UpdateAttributeFunc != nil {
+		return m.UpdateAttributeFunc(ctx, id, req)
+	}
+	result := &model.Attributes{AttributeID: id}
+	if req.Name != nil {
+		result.Name = *req.Name
+	}
+	if req.Description != nil {
+		result.Description = *req.Description
+	}
+	return result, nil
+}
+
 // Resource interface implementations
 func (m *MockPermissionService) CreateResource(ctx context.Context, req model.CreateResoucesRequest) (*model.Resources, error) {
 	if m.CreateResourceFunc != nil {
@@ -93,6 +110,20 @@ func (m *MockPermissionService) DeleteResource(ctx context.Context, id int64) er
 	return nil
 }
 
+func (m *MockPermissionService) UpdateResource(ctx context.Context, id int64, req model.UpdateResourcesRequest) (*model.Resources, error) {
+	if m.UpdateResourceFunc != nil {
+		return m.UpdateResourceFunc(ctx, id, req)
+	}
+	result := &model.Resources{ResourceID: id}
+	if req.Name != nil {
+		result.Name = *req.Name
+	}
+	if req.Description != nil {
+		result.Description = *req.Description
+	}
+	return result, nil
+}
+
 // Permission interface implementations
 func (m *MockPermissionService) CreatePermission(ctx context.Context, req model.CreatePermissionsRequest) (*model.Permissions, error) {
 	if m.CreatePermissionFunc != nil {
@@ -120,6 +151,20 @@ func (m *MockPermissionService) DeletePermission(ctx context.Context, id int64) 
 		return m.DeletePermissionFunc(ctx, id)
 	}
 	return nil
+}
+
+func (m *MockPermissionService) UpdatePermission(ctx context.Context, id int64, req model.UpdatePermissionsRequest) (*model.Permissions, error) {
+	if m.UpdatePermissionFunc != nil {
+		return m.UpdatePermissionFunc(ctx, id, req)
+	}
+	result := &model.Permissions{PermissionID: id}
+	if req.Name != nil {
+		result.Name = *req.Name
+	}
+	if req.Description != nil {
+		result.Description = *req.Description
+	}
+	return result, nil
 }
 
 // ==================== ATTRIBUTE TESTS - POSITIVE CASES ====================
@@ -155,8 +200,8 @@ func TestListAttributes_Success(t *testing.T) {
 	mockService := &MockPermissionService{
 		ListAttributesFunc: func(ctx context.Context) ([]model.Attributes, error) {
 			return []model.Attributes{
-				{AttributeID: 1, Name: "role", Description: "User role", CreateAt: time.Now()},
-				{AttributeID: 2, Name: "department", Description: "Department", CreateAt: time.Now()},
+				{AttributeID: 1, Name: "role", Description: "User role", CreatedAt: time.Now()},
+				{AttributeID: 2, Name: "department", Description: "Department", CreatedAt: time.Now()},
 			}, nil
 		},
 	}

@@ -15,11 +15,12 @@ import (
 )
 
 type MockProfileService struct {
-	CreateProfileFunc  func(ctx context.Context, req model.CreateProfileRequest) (*model.Profile, error)
-	UpdateProfileFunc  func(ctx context.Context, req model.UpdateProfileRequest) (*model.Profile, error)
-	GetAllProfilesFunc func(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.Profile], error)
-	GetProfileByIDFunc func(ctx context.Context, id int64) (model.Profile, error)
-	DeleteProfileFunc  func(ctx context.Context, profileId int64) error
+	CreateProfileFunc    func(ctx context.Context, req model.CreateProfileRequest) (*model.Profile, error)
+	UpdateProfileFunc    func(ctx context.Context, req model.UpdateProfileRequest) (*model.Profile, error)
+	GetAllProfilesFunc   func(ctx context.Context, req model.PageRequest, lastCursor int64) (*model.PageResult[model.Profile], error)
+	GetProfileByIDFunc   func(ctx context.Context, id int64) (model.Profile, error)
+	GetProfileByUserIDFunc func(ctx context.Context, userID int64) (model.Profile, error)
+	DeleteProfileFunc    func(ctx context.Context, profileId int64) error
 }
 
 func (m *MockProfileService) CreateProfile(ctx context.Context, req model.CreateProfileRequest) (*model.Profile, error) {
@@ -48,6 +49,13 @@ func (m *MockProfileService) GetProfileByID(ctx context.Context, id int64) (mode
 		return model.Profile{}, errors.New("GetProfileByIDFunc not implemented")
 	}
 	return m.GetProfileByIDFunc(ctx, id)
+}
+
+func (m *MockProfileService) GetProfileByUserID(ctx context.Context, userID int64) (model.Profile, error) {
+	if m.GetProfileByUserIDFunc == nil {
+		return model.Profile{}, errors.New("GetProfileByUserIDFunc not implemented")
+	}
+	return m.GetProfileByUserIDFunc(ctx, userID)
 }
 
 func (m *MockProfileService) DeleteProfile(ctx context.Context, profileId int64) error {

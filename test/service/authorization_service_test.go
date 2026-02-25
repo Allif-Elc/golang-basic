@@ -12,9 +12,10 @@ import (
 
 // MockAuthorizationRepository is a mock implementation for testing
 type MockAuthorizationRepository struct {
-	GetUserRolesFunc        func(ctx context.Context, userID int64) ([]string, error)
-	GetMatchingPoliciesFunc func(ctx context.Context, resource, action string) ([]model.Policy, error)
-	LogAuditDecisionFunc    func(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error
+	GetUserRolesFunc           func(ctx context.Context, userID int64) ([]string, error)
+	GetMatchingPoliciesFunc    func(ctx context.Context, resource, action string) ([]model.Policy, error)
+	GetUserPoliciesByUserIDFunc func(ctx context.Context, userID int64) ([]model.PolicyWithPriority, error)
+	LogAuditDecisionFunc       func(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error
 }
 
 func (m *MockAuthorizationRepository) GetUserRoles(ctx context.Context, userID int64) ([]string, error) {
@@ -29,6 +30,13 @@ func (m *MockAuthorizationRepository) GetMatchingPolicies(ctx context.Context, r
 		return m.GetMatchingPoliciesFunc(ctx, resource, action)
 	}
 	return []model.Policy{}, nil
+}
+
+func (m *MockAuthorizationRepository) GetUserPoliciesByUserID(ctx context.Context, userID int64) ([]model.PolicyWithPriority, error) {
+	if m.GetUserPoliciesByUserIDFunc != nil {
+		return m.GetUserPoliciesByUserIDFunc(ctx, userID)
+	}
+	return []model.PolicyWithPriority{}, nil
 }
 
 func (m *MockAuthorizationRepository) LogAuditDecision(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error {
