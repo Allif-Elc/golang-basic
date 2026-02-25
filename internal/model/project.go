@@ -41,3 +41,12 @@ type ListProjectsRequest struct {
 	SortBy    string `json:"sort_by" validate:"omitempty,oneof=name created_at updated_at"`
 	SortOrder string `json:"sort_order" validate:"omitempty,oneof=asc desc"`
 }
+
+// ProjectWithStats represents a project with API statistics
+type ProjectWithStats struct {
+	Project
+	RestCount     int64 `json:"rest_count"`
+	GraphQLCount  int64 `json:"graphql_count"`
+	GrpcCount     int64 `json:"grpc_count"`
+	TotalAPICount int64 `json:"total_api_count"`
+}
