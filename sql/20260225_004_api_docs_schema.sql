@@ -103,6 +103,22 @@ CREATE TABLE IF NOT EXISTS api_tags (
 );
 
 -- ============================================================================
+-- CHECK Constraints (Data Validation)
+-- ============================================================================
+
+-- Tags - Hex color format validation (#RRGGBB)
+ALTER TABLE tags ADD CONSTRAINT chk_tags_color_format
+CHECK (color ~ '^#[0-9A-Fa-f]{6}$');
+
+-- Projects - Semantic versioning format
+ALTER TABLE projects ADD CONSTRAINT chk_projects_version_format
+CHECK (version ~ '^\d+\.\d+(\.\d+)?$');
+
+-- REST APIs - Endpoint must start with /
+ALTER TABLE rest_apis ADD CONSTRAINT chk_rest_apis_endpoint_format
+CHECK (endpoint ~ '^/');
+
+-- ============================================================================
 -- Performance Indexes (CRITICAL for performance)
 -- ============================================================================
 
@@ -145,6 +161,37 @@ CREATE INDEX IF NOT EXISTS idx_api_tags_id_api ON api_tags(id_api);
 CREATE INDEX IF NOT EXISTS idx_api_tags_api_type ON api_tags(api_type);
 CREATE INDEX IF NOT EXISTS idx_api_tags_id_tag ON api_tags(id_tag);
 
+-- REST APIs - Missing FK index for user cleanup
+CREATE INDEX IF NOT EXISTS idx_rest_apis_id_user ON rest_apis(id_user);
+
+-- GraphQL APIs - Missing FK index for user cleanup
+CREATE INDEX IF NOT EXISTS idx_graphql_apis_id_user ON graphql_apis(id_user);
+
+-- gRPC APIs - Missing FK index for user cleanup
+CREATE INDEX IF NOT EXISTS idx_grpc_apis_id_user ON grpc_apis(id_user);
+
+-- ============================================================================
+-- Composite Indexes for Query Performance
+-- ============================================================================
+
+-- Composite indexes for project API listings with created_at sort
+CREATE INDEX IF NOT EXISTS idx_rest_apis_project_created
+ON rest_apis(id_project, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_graphql_apis_project_created
+ON graphql_apis(id_project, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_grpc_apis_project_created
+ON grpc_apis(id_project, created_at DESC);
+
+-- Projects - Composite for user + public filtering
+CREATE INDEX IF NOT EXISTS idx_projects_user_public
+ON projects(id_user, is_public);
+
+-- Projects - Covering index with created_at sort
+CREATE INDEX IF NOT EXISTS idx_projects_user_created
+ON projects(id_user, created_at DESC);
+
 -- Full-text search indexes (for searching documentation)
 CREATE INDEX IF NOT EXISTS idx_rest_apis_fts ON rest_apis USING GIN (to_tsvector('english', name || ' ' || COALESCE(description, '')));
 CREATE INDEX IF NOT EXISTS idx_graphql_apis_fts ON graphql_apis USING GIN (to_tsvector('english', name || ' ' || COALESCE(description, '')));
@@ -175,58 +222,6 @@ CREATE TRIGGER update_grpc_apis_updated_at BEFORE UPDATE ON grpc_apis
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
--- ABAC Policies for API Documentation
--- ============================================================================
-
--- Policy: Users can manage their own projects
-INSERT INTO policies (name, policy_rule, is_active, created_at) VALUES
-('api_docs_own_project', '{
-    "resource": "api_docs_project",
-    "action": ["create", "read", "update", "delete"],
-    "condition": "id_user == project_owner_id"
-}', true, NOW());
-
--- Policy: Developers can create and edit any documentation
-INSERT INTO policies (name, policy_rule, is_active, created_at) VALUES
-('api_docs_developer', '{
-    "role": "developer",
-    "resource": "api_docs_*",
-    "action": ["create", "read", "update"]
-}', true, NOW());
-
--- Policy: Technical writers can read and update documentation
-INSERT INTO policies (name, policy_rule, is_active, created_at) VALUES
-('api_docs_technical_writer', '{
-    "role": "technical_writer",
-    "resource": "api_docs_*",
-    "action": ["read", "update"]
-}', true, NOW());
-
--- Policy: Viewers can only read documentation
-INSERT INTO policies (name, policy_rule, is_active, created_at) VALUES
-('api_docs_viewer', '{
-    "role": "viewer",
-    "resource": "api_docs_*",
-    "action": ["read"]
-}', true, NOW());
-
--- Policy: Public projects can be viewed by anyone
-INSERT INTO policies (name, policy_rule, is_active, created_at) VALUES
-('api_docs_public_view', '{
-    "resource": "api_docs_project",
-    "action": "read",
-    "condition": "project.is_public == true"
-}', true, NOW());
-
--- Policy: Admins can do everything
-INSERT INTO policies (name, policy_rule, is_active, created_at) VALUES
-('api_docs_admin', '{
-    "role": "admin",
-    "resource": "api_docs_*",
-    "action": ["*"]
-}', true, NOW());
-
--- ============================================================================
 -- Sample Data (for testing)
 -- ============================================================================
 
@@ -239,18 +234,15 @@ INSERT INTO tags (name, color) VALUES
 ('Utilities', '#FF33A8');
 
 -- Sample project (if user with id_user = 1 exists)
--- Uncomment to insert sample data
-/*
 INSERT INTO projects (id_project, id_user, name, slug, description, version, is_public) VALUES
-(1, 1, 'User Service API', 'user-service-api', 'API for managing users and authentication', '1.0', true);
+(1, 1, 'E-Commerce API', 'e-commerce-api', 'API for e-commerce platform', '1.0', true);
 
 -- Sample REST API
 INSERT INTO rest_apis (id_rest_api, id_project, id_user, name, description, method, endpoint, headers, path_params, query_params, request_body, responses) VALUES
-(1, 1, 1, 'Create User', 'Create a new user account', 'POST', '/api/users',
+(1, 1, 3, 'Create Product', 'Create a new product', 'POST', '/api/products',
     '[{"name": "Content-Type", "description": "Request content type", "required": true, "example": "application/json"}]'::jsonb,
     '[]'::jsonb,
     '[]'::jsonb,
-    '{"type": "object", "properties": {"name": {"type": "string"}, "email": {"type": "string", "format": "email"}}, "required": ["name", "email"]}'::jsonb,
-    '{"200": {"status_code": 200, "description": "User created successfully", "body": {"id_user": 1, "name": "John Doe", "email": "john@example.com"}}}'::jsonb
+    '{"type": "object", "properties": {"name": {"type": "string"}, "price": {"type": "number"}, "sku": {"type": "string"}}, "required": ["name", "price", "sku"]}'::jsonb,
+    '{"200": {"status_code": 200, "description": "Product created successfully", "body": {"id_product": 1, "name": "Widget", "price": 29.99, "sku": "WGT-001"}}}'::jsonb
 );
-*/

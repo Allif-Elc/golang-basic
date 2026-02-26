@@ -72,6 +72,25 @@ ALTER TABLE user_policies SET (autovacuum_vacuum_scale_factor = 0.1);
 ALTER TABLE user_policies SET (autovacuum_analyze_scale_factor = 0.05);
 
 -- ============================================================================
+-- TRIGGERS (for automatic timestamp updates)
+-- ============================================================================
+
+-- Create update_updated_at_column function if not exists
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Trigger for user_policies updated_at
+DROP TRIGGER IF EXISTS update_user_policies_updated_at ON user_policies;
+CREATE TRIGGER update_user_policies_updated_at
+BEFORE UPDATE ON user_policies
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
 -- PERFORMANCE QUERIES (used by Go code)
 -- ============================================================================
 
@@ -140,15 +159,16 @@ ALTER TABLE user_policies SET (autovacuum_analyze_scale_factor = 0.05);
 -- Note: This sample data assumes the users and policies from abac_schema.sql exist
 -- Run this after abac_schema.sql to ensure foreign key constraints are satisfied
 
--- Grant user 2 (Bob Manager) direct access to employee_records with high priority
--- This overrides his normal role-based permissions for this specific resource
+-- Grant user 2 (Bob Tech Lead) admin-like override for projects
+-- Uses policy_id 1 (Admin - Full Access) with high priority
 INSERT INTO user_policies (id_user, id_policy, priority, is_active, created_by)
-VALUES (2, 1, 10, true, 7)  -- Granted by admin (user 7)
+VALUES (2, 1, 10, true, 7)  -- Bob gets admin policy, granted by Grace (admin)
 ON CONFLICT (id_user, id_policy) DO NOTHING;
 
--- Grant user 4 (Dave Staff) temporary HR-like access that expires in 30 days
+-- Grant user 4 (David Developer) extended API docs access that expires in 30 days
+-- Uses policy_id 3 (Tech Lead - Full Access) temporarily
 INSERT INTO user_policies (id_user, id_policy, priority, is_active, expires_at, created_by)
-VALUES (4, 1, 5, true, CURRENT_TIMESTAMP + INTERVAL '30 days', 7)
+VALUES (4, 3, 5, true, CURRENT_TIMESTAMP + INTERVAL '30 days', 7)
 ON CONFLICT (id_user, id_policy) DO NOTHING;
 
 -- ============================================================================

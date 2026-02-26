@@ -140,6 +140,13 @@ ON policies(name) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_policies_is_active
 ON policies(is_active) WHERE is_active = false;
 
+-- JSONB expression indexes for authorization queries
+CREATE INDEX IF NOT EXISTS idx_policies_rule_resource_exact
+ON policies ((policy_rule->>'resource'));
+
+CREATE INDEX IF NOT EXISTS idx_policies_rule_role
+ON policies ((policy_rule->>'role')) WHERE is_active = true;
+
 -- Index for attribute lookups by name
 CREATE INDEX IF NOT EXISTS idx_attributes_name
 ON attributes(name);
@@ -246,48 +253,47 @@ ON CONFLICT (name) DO NOTHING;
 
 -- Insert sample users
 INSERT INTO users (id_user, name, email, password_hash, is_active) VALUES
-(1, 'Alice HR', 'alice@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_1', true),
-(2, 'Bob Manager', 'bob@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_2', true),
-(3, 'Charlie Engineer', 'charlie@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_3', true),
-(4, 'Dave Staff', 'dave@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_4', true),
-(5, 'Eve Developer', 'eve@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_5', true),
-(6, 'Frank TechWriter', 'frank@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_6', true),
+(1, 'Alice Project Manager', 'alice@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_1', true),
+(2, 'Bob Tech Lead', 'bob@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_2', true),
+(3, 'Charlie Developer', 'charlie@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_3', true),
+(4, 'David Developer', 'david@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_4', true),
+(5, 'Eve Technical Writer', 'eve@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_5', true),
+(6, 'Frank Viewer', 'frank@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_6', true),
 (7, 'Grace Admin', 'grace@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_7', true),
-(8, 'Henry Viewer', 'henry@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_8', true)
+(8, 'Henry Guest', 'henry@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_8', true)
 ON CONFLICT (email) DO NOTHING;
 
 -- Insert sample profiles
 INSERT INTO profiles (id_profile, id_user, age, gender, bio) VALUES
-(1, 1, 30, 'female', 'Alice the HR Manager'),
-(2, 2, 35, 'male', 'Bob the Budget Manager'),
-(3, 3, 28, 'male', 'Charlie the Engineer'),
-(4, 4, 25, 'male', 'Dave the Staff member'),
-(5, 5, 27, 'female', 'Eve the Developer'),
-(6, 6, 32, 'male', 'Frank the Technical Writer'),
-(7, 7, 40, 'female', 'Grace the Admin'),
-(8, 8, 26, 'male', 'Henry the Viewer')
+(1, 1, 35, 'female', 'Alice the Project Manager'),
+(2, 2, 32, 'male', 'Bob the Tech Lead'),
+(3, 3, 28, 'male', 'Charlie the Backend Developer'),
+(4, 4, 26, 'male', 'David the Frontend Developer'),
+(5, 5, 30, 'female', 'Eve the Technical Writer'),
+(6, 6, 25, 'male', 'Frank the Read-only Viewer'),
+(7, 7, 40, 'female', 'Grace the System Admin'),
+(8, 8, 24, 'male', 'Henry the Guest User')
 ON CONFLICT (id_user) DO NOTHING;
 
 -- Assign roles to users
 INSERT INTO user_attributes (id_user, id_attribute, value) VALUES
-(1, 1, 'HR'),              -- alice has HR role
-(2, 1, 'Manager'),         -- bob has Manager role
-(3, 1, 'Engineer'),        -- charlie has Engineer role
-(4, 1, 'Staff'),           -- dave has Staff role
-(5, 1, 'developer'),       -- eve has developer role
-(6, 1, 'technical_writer'), -- frank has technical_writer role
-(7, 1, 'admin'),           -- grace has admin role
-(8, 1, 'viewer')           -- henry has viewer role
+(1, 1, 'project_manager'),  -- alice can manage projects
+(2, 1, 'tech_lead'),        -- bob leads technical teams
+(3, 1, 'developer'),        -- charlie develops APIs
+(4, 1, 'developer'),        -- david develops APIs
+(5, 1, 'technical_writer'), -- eve writes documentation
+(6, 1, 'viewer'),           -- frank only views
+(7, 1, 'admin'),            -- grace has full access
+(8, 1, 'viewer')            -- henry is guest viewer
 ON CONFLICT (id_user, id_attribute, value) DO NOTHING;
 
 -- Insert resources
 INSERT INTO resources (id_resource, name, description) VALUES
-(1, 'employee_records', 'Employee HR records'),
-(2, 'budget_report', 'Budget reports'),
-(3, 'api_docs_project', 'API Documentation Projects'),
-(4, 'api_docs_rest_api', 'REST API Documentation'),
-(5, 'api_docs_graphql_api', 'GraphQL API Documentation'),
-(6, 'api_docs_grpc_api', 'gRPC API Documentation')
+(1, 'projects', 'Project management resources'),
+(2, 'api_docs_project', 'API Documentation Projects'),
+(3, 'api_docs_rest_api', 'REST API Documentation'),
+(4, 'api_docs_graphql_api', 'GraphQL API Documentation'),
+(5, 'api_docs_grpc_api', 'gRPC API Documentation')
 ON CONFLICT (name) DO NOTHING;
 
 -- Insert permissions
@@ -299,31 +305,36 @@ INSERT INTO permissions (id_permission, name, description) VALUES
 (5, 'publish', 'Make resources public')
 ON CONFLICT (name) DO NOTHING;
 
--- Insert policies
+-- Insert policies (API Documentation focused)
 INSERT INTO policies (id_policy, name, policy_rule, is_active) VALUES
-(1, 'HR - Employee Records Read/Write',
-'{"role": "HR", "resource": "employee_records", "action": ["read", "write"]}'::jsonb,
+-- 1: Admin - Full wildcard access
+(1, 'Admin - Full Access',
+'{"role": "admin", "resource": "*", "action": ["*"]}'::jsonb,
 true),
-(2, 'Manager - Budget Report Read',
-'{"role": "Manager", "resource": "budget_report", "action": ["read"]}'::jsonb,
+
+-- 2: Project Manager - Full project CRUD
+(2, 'Project Manager - Projects CRUD',
+'{"role": "project_manager", "resource": "projects", "action": ["create", "read", "update", "delete"]}'::jsonb,
 true),
-(3, 'Engineer - Employee Records Read',
-'{"role": "Engineer", "resource": "employee_records", "action": ["read"]}'::jsonb,
+
+-- 3: Tech Lead - Full API docs access
+(3, 'Tech Lead - API Docs Full Access',
+'{"role": "tech_lead", "resource": "api_docs_*", "action": ["create", "read", "update", "delete"]}'::jsonb,
 true),
-(4, 'Manager - Budget Report Write',
-'{"role": "Manager", "resource": "budget_report", "action": ["write"]}'::jsonb,
-false),  -- Disabled policy
-(5, 'Developer - API Docs Create',
+
+-- 4: Developer - Create and edit API docs
+(4, 'Developer - API Docs CRU',
 '{"role": "developer", "resource": "api_docs_*", "action": ["create", "read", "update"]}'::jsonb,
 true),
-(6, 'Technical Writer - API Docs Read/Update',
+
+-- 5: Technical Writer - Read and update API docs
+(5, 'Technical Writer - API Docs RU',
 '{"role": "technical_writer", "resource": "api_docs_*", "action": ["read", "update"]}'::jsonb,
 true),
-(7, 'Viewer - API Docs Read Only',
-'{"role": "viewer", "resource": "api_docs_*", "action": ["read"]}'::jsonb,
-true),
-(8, 'Admin - All Access',
-'{"role": "admin", "resource": "*", "action": ["*"]}'::jsonb,
+
+-- 6: Viewer - Read-only access
+(6, 'Viewer - Read Only',
+'{"role": "viewer", "resource": "*", "action": ["read"]}'::jsonb,
 true)
 ON CONFLICT (name) DO NOTHING;
 

@@ -25,7 +25,7 @@ func (r *ProjectRepository) Create(ctx context.Context, req *model.CreateProject
 
 	query := `
 		INSERT INTO projects (id_user, name, slug, description, version, is_public, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, NOW(), NOW())
 		RETURNING id_project, created_at, updated_at
 	`
 
@@ -56,7 +56,7 @@ func (r *ProjectRepository) Create(ctx context.Context, req *model.CreateProject
 // FindByID retrieves a project by its ID
 func (r *ProjectRepository) FindByID(ctx context.Context, projectID int64) (model.Project, error) {
 	query := `
-		SELECT id_project, id_user, name, slug, description, version, is_public, created_at, updated_at
+		SELECT id_project, id_user, name, slug, description, COALESCE(version, '1.0') as version, is_public, created_at, updated_at
 		FROM projects
 		WHERE id_project = $1
 	`
@@ -84,7 +84,7 @@ func (r *ProjectRepository) FindByID(ctx context.Context, projectID int64) (mode
 // FindBySlug retrieves a project by its slug and user ID
 func (r *ProjectRepository) FindBySlug(ctx context.Context, slug string, userID int64) (model.Project, error) {
 	query := `
-		SELECT id_project, id_user, name, slug, description, version, is_public, created_at, updated_at
+		SELECT id_project, id_user, name, slug, description, COALESCE(version, '1.0') as version, is_public, created_at, updated_at
 		FROM projects
 		WHERE slug = $1 AND id_user = $2
 	`
@@ -122,11 +122,11 @@ func (r *ProjectRepository) Update(ctx context.Context, projectID int64, req *mo
 		UPDATE projects
 		SET name = COALESCE($1, name),
 		    description = COALESCE($2, description),
-		    version = COALESCE($3, version),
+		    version = NULLIF(COALESCE($3, version), ''),
 		    is_public = COALESCE($4, is_public),
 		    updated_at = NOW()
 		WHERE id_project = $5
-		RETURNING id_project, id_user, name, slug, description, version, is_public, created_at, updated_at
+		RETURNING id_project, id_user, name, slug, description, COALESCE(version, '1.0') as version, is_public, created_at, updated_at
 	`
 
 	var project model.Project
@@ -290,7 +290,7 @@ func (r *ProjectRepository) FindAll(ctx context.Context, req model.ListProjectsR
 
 	// Main query
 	query := fmt.Sprintf(`
-		SELECT id_project, id_user, name, slug, description, version, is_public, created_at, updated_at
+		SELECT id_project, id_user, name, slug, description, COALESCE(version, '1.0') as version, is_public, created_at, updated_at
 		FROM projects
 		%s
 		ORDER BY %s
@@ -415,7 +415,7 @@ func (r *ProjectRepository) FindAllWithStats(ctx context.Context, req model.List
 	// Main query with LATERAL JOINs for API stats - single round-trip
 	query := fmt.Sprintf(`
 		SELECT
-			p.id_project, p.id_user, p.name, p.slug, p.description, p.version, p.is_public,
+			p.id_project, p.id_user, p.name, p.slug, p.description, COALESCE(p.version, '1.0') as version, p.is_public,
 			p.created_at, p.updated_at,
 			COALESCE(ra.rest_count, 0) as rest_count,
 			COALESCE(ga.graphql_count, 0) as graphql_count,
