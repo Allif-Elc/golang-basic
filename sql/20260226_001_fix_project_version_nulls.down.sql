@@ -1,0 +1,2 @@
+-- Down migration for fix_project_version_nulls
+-- This migration only updated data, no rollback needed
