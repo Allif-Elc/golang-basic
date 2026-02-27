@@ -36,6 +36,7 @@ func SetupRoutes() *chi.Mux {
 	permissionRepo := repository.NewPermissionRepository(config.DB)
 	policyRepo := repository.NewPolicyRepository(config.DB)
 	userPolicyRepo := repository.NewUserPolicyRepository(config.DB)
+	userAttributeRepo := repository.NewUserAttributeRepository(config.DB)
 	projectRepo := repository.NewProjectRepository(config.DB)
 	restAPIRepo := repository.NewRestAPIRepository(config.DB)
 	graphqlAPIRepo := repository.NewGraphQLAPIRepository(config.DB)
@@ -49,6 +50,7 @@ func SetupRoutes() *chi.Mux {
 	permissionService := service.NewPermissionService(permissionRepo)
 	policyService := service.NewPolicyService(policyRepo)
 	userPolicyService := service.NewUserPolicyService(userPolicyRepo, authorizationRepo)
+	userAttributeService := service.NewUserAttributeService(userAttributeRepo, permissionRepo, userRepo)
 	projectService := service.NewProjectService(projectRepo)
 	restAPIService := service.NewRestAPIService(restAPIRepo, projectRepo)
 	graphqlAPIService := service.NewGraphQLAPIService(graphqlAPIRepo, projectRepo)
@@ -61,6 +63,7 @@ func SetupRoutes() *chi.Mux {
 	permissionController := controller.NewPermissionController(permissionService)
 	policyController := controller.NewPolicyController(policyService)
 	userPolicyController := controller.NewUserPolicyController(userPolicyService)
+	userAttributeController := controller.NewUserAttributeController(userAttributeService)
 	projectController := controller.NewProjectController(projectService)
 	restAPIController := controller.NewRestAPIController(restAPIService)
 	graphqlAPIController := controller.NewGraphQLAPIController(graphqlAPIService)
@@ -276,6 +279,18 @@ func SetupRoutes() *chi.Mux {
 
 				// Get policies by user ID
 				r.Get("/user/{userId}", userPolicyController.GetUserPoliciesByUserID)
+			})
+
+			// User Attributes (Assign attributes to users)
+			r.Route("/user-attributes", func(r chi.Router) {
+				r.Get("/", userAttributeController.ListUserAttributes)
+				r.Post("/", userAttributeController.CreateUserAttribute)
+
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", userAttributeController.GetUserAttributeByID)
+					r.Put("/", userAttributeController.UpdateUserAttribute)
+					r.Delete("/", userAttributeController.DeleteUserAttribute)
+				})
 			})
 		})
 	})
