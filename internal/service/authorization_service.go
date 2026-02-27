@@ -13,7 +13,10 @@ import (
 // AuthorizationRepositoryInterface defines the contract for authorization data operations
 // This allows for both real repository and mock implementations
 type AuthorizationRepositoryInterface interface {
+	// Deprecated: Use GetUserAttributes for full attribute-based authorization
 	GetUserRoles(ctx context.Context, userID int64) ([]string, error)
+	// GetUserAttributes retrieves all user attributes for attribute-based authorization
+	GetUserAttributes(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error)
 	GetMatchingPolicies(ctx context.Context, resource, action string) ([]model.Policy, error)
 	GetUserPoliciesByUserID(ctx context.Context, userID int64) ([]model.PolicyWithPriority, error)
 	LogAuditDecision(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error
@@ -33,26 +36,26 @@ func NewAuthorizationService(repo AuthorizationRepositoryInterface) *Authorizati
 // Authorize checks if a user is allowed to perform an action on a resource
 // Returns: (allowed, reason, error)
 //
-// Authorization Flow (Priority-Based):
-// 1. Fetch user roles (~5-10ms)
+// Authorization Flow (Priority-Based with Attribute-Based Access Control):
+// 1. Fetch user attributes (~5-10ms)
 // 2. Fetch user-specific policies with priority (~5-10ms)
-// 3. Fetch matching role-based policies (~10-20ms)
+// 3. Fetch matching attribute-based policies (~10-20ms)
 // 4. Merge and sort by priority (in-memory)
 // 5. Evaluate policies in priority order (~1-5ms)
 // 6. Log audit decision (~5-10ms)
 //
 // Performance: <50ms with 1M rows when indexes are properly configured
 func (s *AuthorizationService) Authorize(ctx context.Context, req model.AuthorizeRequest) (model.AuthorizeResponse, error) {
-	// Step 1: Fetch user roles (cached query: ~5-10ms)
-	roles, err := s.repo.GetUserRoles(ctx, req.UserID)
+	// Step 1: Fetch user attributes (cached query: ~5-10ms)
+	attributes, err := s.repo.GetUserAttributes(ctx, req.UserID)
 	if err != nil {
-		return model.AuthorizeResponse{}, fmt.Errorf("failed to get user roles: %w", err)
+		return model.AuthorizeResponse{}, fmt.Errorf("failed to get user attributes: %w", err)
 	}
 
-	if len(roles) == 0 {
+	if len(attributes) == 0 {
 		resp := model.AuthorizeResponse{
 			Allowed: false,
-			Reason:  "no roles assigned to user",
+			Reason:  "no attributes assigned to user",
 		}
 		s.logAudit(ctx, req, resp)
 		return resp, nil
@@ -64,14 +67,14 @@ func (s *AuthorizationService) Authorize(ctx context.Context, req model.Authoriz
 		return model.AuthorizeResponse{}, fmt.Errorf("failed to fetch user policies: %w", err)
 	}
 
-	// Step 3: Fetch matching role-based policies (existing)
+	// Step 3: Fetch matching attribute-based policies
 	policies, err := s.repo.GetMatchingPolicies(ctx, req.Resource, req.Action)
 	if err != nil {
 		return model.AuthorizeResponse{}, fmt.Errorf("failed to fetch policies: %w", err)
 	}
 
-	// Step 4: Merge and sort by priority (NEW)
-	// User policies have their assigned priority, role-based policies have priority 0
+	// Step 4: Merge and sort by priority
+	// User policies have their assigned priority, attribute-based policies have priority 0
 	allPolicies := s.mergeAndSortPolicies(userPolicies, policies)
 
 	if len(allPolicies) == 0 {
@@ -83,8 +86,8 @@ func (s *AuthorizationService) Authorize(ctx context.Context, req model.Authoriz
 		return resp, nil
 	}
 
-	// Step 5: Evaluate policies with priority (MODIFIED)
-	allowed, reason := s.evaluatePoliciesWithPriority(ctx, roles, allPolicies, req.Resource, req.Action)
+	// Step 5: Evaluate policies with attribute-based matching
+	allowed, reason := s.evaluatePoliciesWithAttributes(ctx, attributes, allPolicies, req.Resource, req.Action)
 
 	resp := model.AuthorizeResponse{
 		Allowed: allowed,
@@ -165,6 +168,7 @@ func (s *AuthorizationService) mergeAndSortPolicies(
 // evaluatePoliciesWithPriority checks policies in priority order
 // First matching policy wins (regardless of allow/deny)
 // User policies (priority > 0) are evaluated before role-based policies (priority = 0)
+// Deprecated: Use evaluatePoliciesWithAttributes for new attribute-based authorization
 func (s *AuthorizationService) evaluatePoliciesWithPriority(
 	ctx context.Context,
 	userRoles []string,
@@ -184,9 +188,11 @@ func (s *AuthorizationService) evaluatePoliciesWithPriority(
 			continue // Skip malformed policies
 		}
 
-		// Check if user has the required role
-		if _, exists := roleSet[rule.Role]; !exists {
-			continue // User doesn't have this policy's role
+		// Check if user has the required role (backward compatibility with old policies)
+		if rule.Role != "" {
+			if _, exists := roleSet[rule.Role]; !exists {
+				continue // User doesn't have this policy's role
+			}
 		}
 
 		// Validate resource matches policy's wildcard pattern
@@ -210,6 +216,81 @@ func (s *AuthorizationService) evaluatePoliciesWithPriority(
 	}
 
 	return false, fmt.Sprintf("access denied: user roles %v do not match any policy", userRoles)
+}
+
+// evaluatePoliciesWithAttributes checks policies in priority order using attribute-based matching
+// Supports both old format (role) and new format (attribute_name + attribute_value)
+// First matching policy wins (regardless of allow/deny)
+// User policies (priority > 0) are evaluated before attribute-based policies (priority = 0)
+func (s *AuthorizationService) evaluatePoliciesWithAttributes(
+	ctx context.Context,
+	userAttributes []model.UserAttributeDetail,
+	policiesWithPriority []model.PolicyWithPriority,
+	resource, action string,
+) (bool, string) {
+	// Build attribute lookup map: "name:value" -> attribute for O(1) lookup
+	attrMap := make(map[string]model.UserAttributeDetail)
+	for _, attr := range userAttributes {
+		key := attr.AttributeName + ":" + attr.Value
+		attrMap[key] = attr
+	}
+
+	// Check each policy in priority order
+	for _, pwp := range policiesWithPriority {
+		rule, err := parsePolicyRule(pwp.Policy.PolicyRule)
+		if err != nil {
+			continue // Skip malformed policies
+		}
+
+		// Check if user has the required attribute (new format)
+		if rule.AttributeName != "" && rule.AttributeValue != "" {
+			key := rule.AttributeName + ":" + rule.AttributeValue
+			if _, exists := attrMap[key]; !exists {
+				continue // User doesn't have this policy's attribute with this value
+			}
+		} else if rule.Role != "" {
+			// Backward compatibility with old format (role only)
+			key := "role:" + rule.Role
+			if _, exists := attrMap[key]; !exists {
+				continue // User doesn't have this policy's role
+			}
+		} else {
+			// Policy has no attribute or role specified
+			continue
+		}
+
+		// Validate resource matches policy's wildcard pattern
+		if !matchesResource(rule.Resource, resource) {
+			continue
+		}
+
+		// Validate action matches policy's action array
+		if !matchesAction(rule.Action, action) {
+			continue
+		}
+
+		// Found matching policy
+		source := "attribute-based policy"
+		if pwp.Priority > 0 {
+			source = fmt.Sprintf("user policy (priority: %d)", pwp.Priority)
+		} else if pwp.Priority < 0 {
+			source = fmt.Sprintf("user policy (priority: %d, low priority)", pwp.Priority)
+		}
+
+		// Use attribute name/value if available, otherwise fall back to role
+		attrDesc := rule.AttributeName + "=" + rule.AttributeValue
+		if rule.AttributeName == "" && rule.Role != "" {
+			attrDesc = "role=" + rule.Role
+		}
+		return true, fmt.Sprintf("access granted via %s '%s' with %s", source, pwp.Policy.Name, attrDesc)
+	}
+
+	// Build list of user attributes for error message
+	attrList := make([]string, 0, len(userAttributes))
+	for _, attr := range userAttributes {
+		attrList = append(attrList, attr.AttributeName+"="+attr.Value)
+	}
+	return false, fmt.Sprintf("access denied: user attributes %v do not match any policy", attrList)
 }
 
 // matchesResource checks if requested resource matches policy resource pattern
