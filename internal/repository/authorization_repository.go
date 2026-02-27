@@ -19,6 +19,7 @@ func NewAuthorizationRepository(db *pgxpool.Pool) *AuthorizationRepository {
 }
 
 func (r *AuthorizationRepository) GetUserRoles(ctx context.Context, userID int64) ([]string, error) {
+	// Deprecated: Use GetUserAttributes for full attribute-based authorization
 	// Required indexes:
 	//   CREATE INDEX idx_user_attributes_user ON user_attributes(id_user);
 	//   CREATE INDEX idx_user_attributes_attribute ON user_attributes(id_attribute);
@@ -51,6 +52,65 @@ func (r *AuthorizationRepository) GetUserRoles(ctx context.Context, userID int64
 	}
 
 	return roles, nil
+}
+
+// GetUserAttributes retrieves all attributes for a user
+// Returns detailed attribute information including name, type, and value
+// Used for attribute-based authorization (new ABAC model)
+// Required indexes:
+//   CREATE INDEX idx_user_attributes_user ON user_attributes(id_user);
+//   CREATE INDEX idx_user_attributes_attribute ON user_attributes(id_attribute);
+//   CREATE INDEX idx_attributes_name ON attributes(name);
+func (r *AuthorizationRepository) GetUserAttributes(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+	query := `
+		SELECT
+			ua.id_user_attribute,
+			ua.id_user,
+			u.name as user_name,
+			u.email as user_email,
+			ua.id_attribute,
+			a.name as attribute_name,
+			a.type as attribute_type,
+			a.enum_values,
+			ua.value,
+			ua.created_at
+		FROM user_attributes ua
+		INNER JOIN attributes a ON ua.id_attribute = a.id_attribute
+		INNER JOIN users u ON ua.id_user = u.id_user
+		WHERE ua.id_user = $1
+	`
+
+	rows, err := r.db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user attributes: %w", err)
+	}
+	defer rows.Close()
+
+	var attributes []model.UserAttributeDetail
+	for rows.Next() {
+		var attr model.UserAttributeDetail
+		if err := rows.Scan(
+			&attr.UserAttributeID,
+			&attr.UserID,
+			&attr.UserName,
+			&attr.UserEmail,
+			&attr.AttributeID,
+			&attr.AttributeName,
+			&attr.AttributeType,
+			&attr.EnumValues,
+			&attr.Value,
+			&attr.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan user attribute: %w", err)
+		}
+		attributes = append(attributes, attr)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating user attributes: %w", err)
+	}
+
+	return attributes, nil
 }
 
 // GetMatchingPolicies fetches policies that match the resource and action
