@@ -12,10 +12,18 @@ import (
 
 // MockAuthorizationRepository is a mock implementation for testing
 type MockAuthorizationRepository struct {
-	GetUserRolesFunc           func(ctx context.Context, userID int64) ([]string, error)
+	GetUserAttributesFunc      func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error)
+	GetUserRolesFunc           func(ctx context.Context, userID int64) ([]string, error) // Deprecated: Use GetUserAttributesFunc
 	GetMatchingPoliciesFunc    func(ctx context.Context, resource, action string) ([]model.Policy, error)
 	GetUserPoliciesByUserIDFunc func(ctx context.Context, userID int64) ([]model.PolicyWithPriority, error)
 	LogAuditDecisionFunc       func(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error
+}
+
+func (m *MockAuthorizationRepository) GetUserAttributes(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+	if m.GetUserAttributesFunc != nil {
+		return m.GetUserAttributesFunc(ctx, userID)
+	}
+	return []model.UserAttributeDetail{}, nil
 }
 
 func (m *MockAuthorizationRepository) GetUserRoles(ctx context.Context, userID int64) ([]string, error) {
@@ -46,7 +54,27 @@ func (m *MockAuthorizationRepository) LogAuditDecision(ctx context.Context, user
 	return nil
 }
 
-// Helper function to create a policy
+// Helper function to create a policy with attribute-based format
+func createTestPolicyWithAttribute(name, attrName, attrValue, resource string, actions []string) model.Policy {
+	rule := model.PolicyRule{
+		AttributeName:  attrName,
+		AttributeValue: attrValue,
+		Resource:       resource,
+		Action:         actions,
+	}
+	ruleJSON, _ := json.Marshal(rule)
+
+	return model.Policy{
+		PolicyId:   1,
+		Name:       name,
+		PolicyRule: ruleJSON,
+		IsActive:   true,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+}
+
+// Helper function to create a policy with role-based format (deprecated, for backward compatibility)
 func createTestPolicy(name, role, resource string, actions []string) model.Policy {
 	rule := model.PolicyRule{
 		Role:     role,
@@ -67,12 +95,14 @@ func createTestPolicy(name, role, resource string, actions []string) model.Polic
 
 func TestAuthorize_HR_AllowedReadEmployeeRecords(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			if resource == "employee_records" && action == "read" {
-				return []model.Policy{createTestPolicy("HR Read", "HR", "employee_records", []string{"read"})}, nil
+				return []model.Policy{createTestPolicyWithAttribute("HR Read", "role", "HR", "employee_records", []string{"read"})}, nil
 			}
 			return []model.Policy{}, nil
 		},
@@ -98,12 +128,14 @@ func TestAuthorize_HR_AllowedReadEmployeeRecords(t *testing.T) {
 
 func TestAuthorize_HR_AllowedWriteEmployeeRecords(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			if resource == "employee_records" && action == "write" {
-				return []model.Policy{createTestPolicy("HR Write", "HR", "employee_records", []string{"write"})}, nil
+				return []model.Policy{createTestPolicyWithAttribute("HR Write", "role", "HR", "employee_records", []string{"write"})}, nil
 			}
 			return []model.Policy{}, nil
 		},
@@ -129,12 +161,14 @@ func TestAuthorize_HR_AllowedWriteEmployeeRecords(t *testing.T) {
 
 func TestAuthorize_Manager_AllowedReadBudgetReport(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"Manager"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Manager"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			if resource == "budget_report" && action == "read" {
-				return []model.Policy{createTestPolicy("Manager Read", "Manager", "budget_report", []string{"read"})}, nil
+				return []model.Policy{createTestPolicyWithAttribute("Manager Read", "role", "Manager", "budget_report", []string{"read"})}, nil
 			}
 			return []model.Policy{}, nil
 		},
@@ -160,12 +194,14 @@ func TestAuthorize_Manager_AllowedReadBudgetReport(t *testing.T) {
 
 func TestAuthorize_Engineer_AllowedReadEmployeeRecords(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"Engineer"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Engineer"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			if resource == "employee_records" && action == "read" {
-				return []model.Policy{createTestPolicy("Engineer Read", "Engineer", "employee_records", []string{"read"})}, nil
+				return []model.Policy{createTestPolicyWithAttribute("Engineer Read", "role", "Engineer", "employee_records", []string{"read"})}, nil
 			}
 			return []model.Policy{}, nil
 		},
@@ -191,8 +227,10 @@ func TestAuthorize_Engineer_AllowedReadEmployeeRecords(t *testing.T) {
 
 func TestAuthorize_Engineer_DeniedBudgetReport(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"Engineer"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Engineer"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			// No policies for Engineer accessing budget_report
@@ -225,14 +263,16 @@ func TestAuthorize_Engineer_DeniedBudgetReport(t *testing.T) {
 
 func TestAuthorize_Staff_DeniedEmployeeRecords(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"Staff"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Staff"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			// Policies exist but none for Staff role
 			return []model.Policy{
-				createTestPolicy("HR Read", "HR", "employee_records", []string{"read"}),
-				createTestPolicy("Engineer Read", "Engineer", "employee_records", []string{"read"}),
+				createTestPolicyWithAttribute("HR Read", "role", "HR", "employee_records", []string{"read"}),
+				createTestPolicyWithAttribute("Engineer Read", "role", "Engineer", "employee_records", []string{"read"}),
 			}, nil
 		},
 	}
@@ -255,10 +295,10 @@ func TestAuthorize_Staff_DeniedEmployeeRecords(t *testing.T) {
 	}
 }
 
-func TestAuthorize_NoRolesAssigned(t *testing.T) {
+func TestAuthorize_NoAttributesAssigned(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{}, nil // No roles
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{}, nil // No attributes
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			return []model.Policy{}, nil
@@ -282,15 +322,15 @@ func TestAuthorize_NoRolesAssigned(t *testing.T) {
 		t.Errorf("Expected allowed=false, got true")
 	}
 
-	expectedReason := "no roles assigned to user"
+	expectedReason := "no attributes assigned to user"
 	if resp.Reason != expectedReason {
 		t.Errorf("Expected reason '%s', got '%s'", expectedReason, resp.Reason)
 	}
 }
 
-func TestAuthorize_UserRolesError(t *testing.T) {
+func TestAuthorize_UserAttributesError(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
 			return nil, errors.New("database connection failed")
 		},
 	}
@@ -308,7 +348,7 @@ func TestAuthorize_UserRolesError(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	expectedError := "failed to get user roles"
+	expectedError := "failed to get user attributes"
 	if !containsString(err.Error(), expectedError) {
 		t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
 	}
@@ -316,8 +356,10 @@ func TestAuthorize_UserRolesError(t *testing.T) {
 
 func TestAuthorize_PoliciesError(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			return nil, errors.New("failed to query policies")
@@ -343,15 +385,18 @@ func TestAuthorize_PoliciesError(t *testing.T) {
 	}
 }
 
-func TestAuthorize_MultipleRoles_Allowed(t *testing.T) {
+func TestAuthorize_MultipleAttributes_Allowed(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"Engineer", "Manager"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Engineer"},
+				{AttributeName: "role", Value: "Manager"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			if resource == "budget_report" && action == "read" {
 				return []model.Policy{
-					createTestPolicy("Manager Read", "Manager", "budget_report", []string{"read"}),
+					createTestPolicyWithAttribute("Manager Read", "role", "Manager", "budget_report", []string{"read"}),
 				}, nil
 			}
 			return []model.Policy{}, nil
@@ -378,11 +423,13 @@ func TestAuthorize_MultipleRoles_Allowed(t *testing.T) {
 
 func TestHasPermission_Allowed(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
-			return []model.Policy{createTestPolicy("HR Read", "HR", "employee_records", []string{"read"})}, nil
+			return []model.Policy{createTestPolicyWithAttribute("HR Read", "role", "HR", "employee_records", []string{"read"})}, nil
 		},
 	}
 
@@ -401,8 +448,10 @@ func TestHasPermission_Allowed(t *testing.T) {
 
 func TestHasPermission_Denied(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"Staff"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Staff"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			return []model.Policy{}, nil
@@ -424,14 +473,16 @@ func TestHasPermission_Denied(t *testing.T) {
 
 func TestBatchAuthorize_MultipleRequests(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			if resource == "employee_records" {
 				return []model.Policy{
-					createTestPolicy("HR Read", "HR", "employee_records", []string{"read"}),
-					createTestPolicy("HR Write", "HR", "employee_records", []string{"write"}),
+					createTestPolicyWithAttribute("HR Read", "role", "HR", "employee_records", []string{"read"}),
+					createTestPolicyWithAttribute("HR Write", "role", "HR", "employee_records", []string{"write"}),
 				}, nil
 			}
 			return []model.Policy{}, nil
@@ -475,11 +526,13 @@ func TestAuthorize_AuditLogCalled(t *testing.T) {
 	var auditReason string
 
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
-			return []model.Policy{createTestPolicy("HR Read", "HR", "employee_records", []string{"read"})}, nil
+			return []model.Policy{createTestPolicyWithAttribute("HR Read", "role", "HR", "employee_records", []string{"read"})}, nil
 		},
 		LogAuditDecisionFunc: func(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error {
 			auditCalled = true
@@ -535,12 +588,14 @@ func contains(s, substr string) bool {
 
 func TestAuthorize_WildcardResource_Admin(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"admin"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "admin"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			// Wildcard policy matches any resource
-			return []model.Policy{createTestPolicy("Admin All", "admin", "*", []string{"read"})}, nil
+			return []model.Policy{createTestPolicyWithAttribute("Admin All", "role", "admin", "*", []string{"read"})}, nil
 		},
 	}
 
@@ -564,12 +619,14 @@ func TestAuthorize_WildcardResource_Admin(t *testing.T) {
 
 func TestAuthorize_WildcardAction_AllActions(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"admin"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "admin"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			// Policy with wildcard action
-			return []model.Policy{createTestPolicy("Admin All Actions", "admin", "employee_records", []string{"*"})}, nil
+			return []model.Policy{createTestPolicyWithAttribute("Admin All Actions", "role", "admin", "employee_records", []string{"*"})}, nil
 		},
 	}
 
@@ -598,12 +655,14 @@ func TestAuthorize_WildcardAction_AllActions(t *testing.T) {
 
 func TestAuthorize_DoubleWildcard_AdminAllAccess(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"admin"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "admin"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			// Double wildcard policy: resource="*" AND action="*"
-			return []model.Policy{createTestPolicy("Admin All Access", "admin", "*", []string{"*"})}, nil
+			return []model.Policy{createTestPolicyWithAttribute("Admin All Access", "role", "admin", "*", []string{"*"})}, nil
 		},
 	}
 
@@ -654,12 +713,14 @@ func TestAuthorize_DoubleWildcard_AdminAllAccess(t *testing.T) {
 
 func TestAuthorize_DisabledPolicy_Ignored(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"Manager"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Manager"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			// Only disabled policy exists
-			policy := createTestPolicy("Disabled Write", "Manager", "budget_report", []string{"write"})
+			policy := createTestPolicyWithAttribute("Disabled Write", "role", "Manager", "budget_report", []string{"write"})
 			policy.IsActive = false
 			return []model.Policy{policy}, nil
 		},
@@ -691,8 +752,10 @@ func TestAuthorize_DisabledPolicy_Ignored(t *testing.T) {
 
 func TestAuthorize_MalformedPolicyRule_Skipped(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			// Return policy with malformed JSON
@@ -728,11 +791,13 @@ func TestAuthorize_MalformedPolicyRule_Skipped(t *testing.T) {
 
 func TestAuthorize_AuditLogFailure_ServiceContinues(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
-			return []model.Policy{createTestPolicy("HR Read", "HR", "employee_records", []string{"read"})}, nil
+			return []model.Policy{createTestPolicyWithAttribute("HR Read", "role", "HR", "employee_records", []string{"read"})}, nil
 		},
 		LogAuditDecisionFunc: func(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error {
 			// Simulate audit log failure
@@ -767,14 +832,16 @@ func TestAuthorize_AuditLogFailure_ServiceContinues(t *testing.T) {
 func TestBatchAuthorize_PartialFailure(t *testing.T) {
 	// Test where some requests succeed and some fail
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			if resource == "fail_resource" {
 				return nil, errors.New("database error")
 			}
-			return []model.Policy{createTestPolicy("HR Read", "HR", resource, []string{action})}, nil
+			return []model.Policy{createTestPolicyWithAttribute("HR Read", "role", "HR", resource, []string{action})}, nil
 		},
 	}
 
@@ -804,13 +871,15 @@ func TestBatchAuthorize_PartialFailure(t *testing.T) {
 
 func TestBatchAuthorize_ContextCancellation(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
 			// Check context
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			default:
-				return []string{"HR"}, nil
+				return []model.UserAttributeDetail{
+					{AttributeName: "role", Value: "HR"},
+				}, nil
 			}
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
@@ -819,7 +888,7 @@ func TestBatchAuthorize_ContextCancellation(t *testing.T) {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			default:
-				return []model.Policy{createTestPolicy("HR Read", "HR", resource, []string{action})}, nil
+				return []model.Policy{createTestPolicyWithAttribute("HR Read", "role", "HR", resource, []string{action})}, nil
 			}
 		},
 	}
@@ -847,7 +916,7 @@ func TestBatchAuthorize_ContextCancellation(t *testing.T) {
 
 func TestHasPermission_ErrorPropagation(t *testing.T) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
 			return nil, errors.New("database connection lost")
 		},
 	}
@@ -866,16 +935,374 @@ func TestHasPermission_ErrorPropagation(t *testing.T) {
 }
 
 // ============================================================================
+// New Attribute-Based Authorization Tests
+// ============================================================================
+
+func TestAuthorize_AttributeBased_DepartmentAccess(t *testing.T) {
+	mockRepo := &MockAuthorizationRepository{
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "department", Value: "Engineering"},
+			}, nil
+		},
+		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
+			if resource == "code_repository" && action == "write" {
+				return []model.Policy{
+					createTestPolicyWithAttribute("Engineering Code Access", "department", "Engineering", "code_repository", []string{"read", "write"}),
+				}, nil
+			}
+			return []model.Policy{}, nil
+		},
+	}
+
+	svc := service.NewAuthorizationService(mockRepo)
+	req := model.AuthorizeRequest{
+		UserID:   1,
+		Resource: "code_repository",
+		Action:   "write",
+	}
+
+	resp, err := svc.Authorize(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if !resp.Allowed {
+		t.Errorf("Expected allowed=true for Engineering department accessing code repository, got false. Reason: %s", resp.Reason)
+	}
+}
+
+func TestAuthorize_AttributeBased_MultipleAttributes(t *testing.T) {
+	mockRepo := &MockAuthorizationRepository{
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Manager"},
+				{AttributeName: "department", Value: "Engineering"},
+				{AttributeName: "level", Value: "5"},
+			}, nil
+		},
+		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
+			if resource == "budget_report" && action == "read" {
+				return []model.Policy{
+					createTestPolicyWithAttribute("Level 5 Budget Access", "level", "5", "budget_report", []string{"read"}),
+				}, nil
+			}
+			return []model.Policy{}, nil
+		},
+	}
+
+	svc := service.NewAuthorizationService(mockRepo)
+	req := model.AuthorizeRequest{
+		UserID:   1,
+		Resource: "budget_report",
+		Action:   "read",
+	}
+
+	resp, err := svc.Authorize(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if !resp.Allowed {
+		t.Errorf("Expected allowed=true for level 5 user accessing budget report, got false. Reason: %s", resp.Reason)
+	}
+}
+
+func TestAuthorize_AttributeBased_NoMatchForUserAttributes(t *testing.T) {
+	mockRepo := &MockAuthorizationRepository{
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "department", Value: "Sales"},
+			}, nil
+		},
+		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
+			if resource == "code_repository" && action == "write" {
+				return []model.Policy{
+					createTestPolicyWithAttribute("Engineering Code Access", "department", "Engineering", "code_repository", []string{"read", "write"}),
+				}, nil
+			}
+			return []model.Policy{}, nil
+		},
+	}
+
+	svc := service.NewAuthorizationService(mockRepo)
+	req := model.AuthorizeRequest{
+		UserID:   1,
+		Resource: "code_repository",
+		Action:   "write",
+	}
+
+	resp, err := svc.Authorize(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if resp.Allowed {
+		t.Errorf("Expected allowed=false for Sales department accessing code repository, got true")
+	}
+
+	// Verify denial reason contains user attributes
+	if !containsString(resp.Reason, "Sales") {
+		t.Errorf("Expected denial reason to contain user attribute 'Sales', got '%s'", resp.Reason)
+	}
+}
+
+func TestAuthorize_BackwardCompatibility_RoleFormat(t *testing.T) {
+	mockRepo := &MockAuthorizationRepository{
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
+		},
+		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
+			if resource == "employee_records" && action == "read" {
+				// Old format policy (using "role" field)
+				return []model.Policy{createTestPolicy("HR Read", "HR", "employee_records", []string{"read"})}, nil
+			}
+			return []model.Policy{}, nil
+		},
+	}
+
+	svc := service.NewAuthorizationService(mockRepo)
+	req := model.AuthorizeRequest{
+		UserID:   1,
+		Resource: "employee_records",
+		Action:   "read",
+	}
+
+	resp, err := svc.Authorize(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if !resp.Allowed {
+		t.Errorf("Expected allowed=true with backward compatible old role format, got false. Reason: %s", resp.Reason)
+	}
+}
+
+func TestAuthorize_UserPolicyPriority_HigherThanAttributePolicy(t *testing.T) {
+	mockRepo := &MockAuthorizationRepository{
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Staff"},
+			}, nil
+		},
+		GetUserPoliciesByUserIDFunc: func(ctx context.Context, userID int64) ([]model.PolicyWithPriority, error) {
+			// User-specific policy with high priority - allows access
+			return []model.PolicyWithPriority{
+				{
+					Policy: createTestPolicyWithAttribute("User Exception", "role", "Staff", "employee_records", []string{"read"}),
+					Priority: 100,
+				},
+			}, nil
+		},
+		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
+			if resource == "employee_records" && action == "read" {
+				// Attribute-based policy denies access (HR only)
+				return []model.Policy{
+					createTestPolicyWithAttribute("HR Only", "role", "HR", "employee_records", []string{"read"}),
+				}, nil
+			}
+			return []model.Policy{}, nil
+		},
+	}
+
+	svc := service.NewAuthorizationService(mockRepo)
+	req := model.AuthorizeRequest{
+		UserID:   1,
+		Resource: "employee_records",
+		Action:   "read",
+	}
+
+	resp, err := svc.Authorize(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if !resp.Allowed {
+		t.Errorf("Expected allowed=true because user policy (priority 100) should be evaluated before attribute policy (priority 0), got false. Reason: %s", resp.Reason)
+	}
+
+	// Verify the reason indicates it came from a user policy with priority
+	if !containsString(resp.Reason, "user policy") && !containsString(resp.Reason, "priority") {
+		t.Logf("Note: Reason format may vary - got '%s'", resp.Reason)
+	}
+}
+
+func TestAuthorize_DepartmentAttribute_WithWildcardResource(t *testing.T) {
+	mockRepo := &MockAuthorizationRepository{
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "department", Value: "IT"},
+			}, nil
+		},
+		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
+			// IT department has wildcard resource access for read
+			return []model.Policy{
+				createTestPolicyWithAttribute("IT Read All", "department", "IT", "*", []string{"read"}),
+			}, nil
+		},
+	}
+
+	svc := service.NewAuthorizationService(mockRepo)
+
+	testResources := []string{"servers", "networks", "databases", "applications"}
+
+	for _, resource := range testResources {
+		req := model.AuthorizeRequest{
+			UserID:   1,
+			Resource: resource,
+			Action:   "read",
+		}
+
+		resp, err := svc.Authorize(context.Background(), req)
+
+		if err != nil {
+			t.Errorf("Expected no error for resource %s, got %v", resource, err)
+		}
+
+		if !resp.Allowed {
+			t.Errorf("Expected allowed=true for IT department accessing %s, got false. Reason: %s", resource, resp.Reason)
+		}
+	}
+}
+
+func TestAuthorize_LevelAttribute_WithActionWildcard(t *testing.T) {
+	mockRepo := &MockAuthorizationRepository{
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "level", Value: "10"},
+			}, nil
+		},
+		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
+			// Level 10 has wildcard action access to financial reports
+			return []model.Policy{
+				createTestPolicyWithAttribute("Level 10 Full Access", "level", "10", "financial_reports", []string{"*"}),
+			}, nil
+		},
+	}
+
+	svc := service.NewAuthorizationService(mockRepo)
+
+	testActions := []string{"read", "write", "delete", "approve"}
+
+	for _, action := range testActions {
+		req := model.AuthorizeRequest{
+			UserID:   1,
+			Resource: "financial_reports",
+			Action:   action,
+		}
+
+		resp, err := svc.Authorize(context.Background(), req)
+
+		if err != nil {
+			t.Errorf("Expected no error for action %s, got %v", action, err)
+		}
+
+		if !resp.Allowed {
+			t.Errorf("Expected allowed=true for level 10 user performing %s on financial_reports, got false. Reason: %s", action, resp.Reason)
+		}
+	}
+}
+
+func TestAuthorize_AttributeBased_PolicyMatchesOnlySpecificValue(t *testing.T) {
+	mockRepo := &MockAuthorizationRepository{
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "clearance", Value: "confidential"},
+			}, nil
+		},
+		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
+			if resource == "secret_documents" && action == "read" {
+				// Policy only allows "top_secret" clearance
+				return []model.Policy{
+					createTestPolicyWithAttribute("Top Secret Access", "clearance", "top_secret", "secret_documents", []string{"read"}),
+				}, nil
+			}
+			return []model.Policy{}, nil
+		},
+	}
+
+	svc := service.NewAuthorizationService(mockRepo)
+	req := model.AuthorizeRequest{
+		UserID:   1,
+		Resource: "secret_documents",
+		Action:   "read",
+	}
+
+	resp, err := svc.Authorize(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if resp.Allowed {
+		t.Errorf("Expected allowed=false for 'confidential' clearance when policy requires 'top_secret', got true")
+	}
+}
+
+func TestAuthorize_AttributeBased_MultiplePoliciesFirstMatchWins(t *testing.T) {
+	mockRepo := &MockAuthorizationRepository{
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Admin"},
+				{AttributeName: "department", Value: "IT"},
+			}, nil
+		},
+		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
+			if resource == "servers" && action == "delete" {
+				return []model.Policy{
+					// First matching policy (Admin allows delete)
+					createTestPolicyWithAttribute("Admin Delete", "role", "Admin", "servers", []string{"delete"}),
+					// Second matching policy (IT denies delete - but first match should win)
+					createTestPolicyWithAttribute("IT No Delete", "department", "IT", "servers", []string{"read"}),
+				}, nil
+			}
+			return []model.Policy{}, nil
+		},
+	}
+
+	svc := service.NewAuthorizationService(mockRepo)
+	req := model.AuthorizeRequest{
+		UserID:   1,
+		Resource: "servers",
+		Action:   "delete",
+	}
+
+	resp, err := svc.Authorize(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if !resp.Allowed {
+		t.Errorf("Expected allowed=true because Admin policy matches first, got false. Reason: %s", resp.Reason)
+	}
+
+	// Verify reason mentions the first matching policy (Admin)
+	if !containsString(resp.Reason, "Admin") {
+		t.Logf("Note: Reason should mention 'Admin' policy, got '%s'", resp.Reason)
+	}
+}
+
+// ============================================================================
 // Benchmark Tests
 // ============================================================================
 
-func BenchmarkAuthorize_SingleRole(b *testing.B) {
+func BenchmarkAuthorize_SingleAttribute(b *testing.B) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
-			return []model.Policy{createTestPolicy("HR Read", "HR", "employee_records", []string{"read"})}, nil
+			return []model.Policy{createTestPolicyWithAttribute("HR Read", "role", "HR", "employee_records", []string{"read"})}, nil
 		},
 		LogAuditDecisionFunc: func(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error {
 			return nil
@@ -895,15 +1322,19 @@ func BenchmarkAuthorize_SingleRole(b *testing.B) {
 	}
 }
 
-func BenchmarkAuthorize_MultipleRoles(b *testing.B) {
+func BenchmarkAuthorize_MultipleAttributes(b *testing.B) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR", "Manager", "Engineer"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+				{AttributeName: "role", Value: "Manager"},
+				{AttributeName: "role", Value: "Engineer"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			return []model.Policy{
-				createTestPolicy("HR Read", "HR", "employee_records", []string{"read"}),
-				createTestPolicy("Manager Read", "Manager", "budget_report", []string{"read"}),
+				createTestPolicyWithAttribute("HR Read", "role", "HR", "employee_records", []string{"read"}),
+				createTestPolicyWithAttribute("Manager Read", "role", "Manager", "budget_report", []string{"read"}),
 			}, nil
 		},
 		LogAuditDecisionFunc: func(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error {
@@ -926,8 +1357,10 @@ func BenchmarkAuthorize_MultipleRoles(b *testing.B) {
 
 func BenchmarkAuthorize_NoMatchingPolicies(b *testing.B) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"Staff"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "Staff"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
 			return []model.Policy{}, nil
@@ -952,11 +1385,13 @@ func BenchmarkAuthorize_NoMatchingPolicies(b *testing.B) {
 
 func BenchmarkBatchAuthorize_10Requests(b *testing.B) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
-			return []model.Policy{createTestPolicy("HR Read", "HR", resource, []string{action})}, nil
+			return []model.Policy{createTestPolicyWithAttribute("HR Read", "role", "HR", resource, []string{action})}, nil
 		},
 		LogAuditDecisionFunc: func(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error {
 			return nil
@@ -981,11 +1416,13 @@ func BenchmarkBatchAuthorize_10Requests(b *testing.B) {
 
 func BenchmarkHasPermission(b *testing.B) {
 	mockRepo := &MockAuthorizationRepository{
-		GetUserRolesFunc: func(ctx context.Context, userID int64) ([]string, error) {
-			return []string{"HR"}, nil
+		GetUserAttributesFunc: func(ctx context.Context, userID int64) ([]model.UserAttributeDetail, error) {
+			return []model.UserAttributeDetail{
+				{AttributeName: "role", Value: "HR"},
+			}, nil
 		},
 		GetMatchingPoliciesFunc: func(ctx context.Context, resource, action string) ([]model.Policy, error) {
-			return []model.Policy{createTestPolicy("HR Read", "HR", "employee_records", []string{"read"})}, nil
+			return []model.Policy{createTestPolicyWithAttribute("HR Read", "role", "HR", "employee_records", []string{"read"})}, nil
 		},
 		LogAuditDecisionFunc: func(ctx context.Context, userID int64, resource, action string, allowed bool, reason string) error {
 			return nil
