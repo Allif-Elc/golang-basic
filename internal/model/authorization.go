@@ -63,6 +63,32 @@ type UserAttribute struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+// UserAttributeDetail includes related user and attribute information
+type UserAttributeDetail struct {
+	UserAttributeID int64     `json:"id_user_attribute"`
+	UserID          int64     `json:"id_user"`
+	UserName        string    `json:"user_name"`
+	UserEmail       string    `json:"user_email"`
+	AttributeID     int64     `json:"id_attribute"`
+	AttributeName   string    `json:"attribute_name"`
+	AttributeType   string    `json:"attribute_type"`
+	EnumValues      []string  `json:"enum_values,omitempty"`
+	Value           string    `json:"value"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+// CreateUserAttributeRequest creates a new user attribute assignment
+type CreateUserAttributeRequest struct {
+	UserID      int64  `json:"id_user" validate:"required"`
+	AttributeID int64  `json:"id_attribute" validate:"required"`
+	Value       string `json:"value" validate:"required"`
+}
+
+// UpdateUserAttributeRequest updates an existing user attribute
+type UpdateUserAttributeRequest struct {
+	Value *string `json:"value" validate:"required"`
+}
+
 // AuditLog represents authorization decision logging
 type AuditLog struct {
 	ID        int64     `json:"id_audit_log"`
@@ -75,10 +101,19 @@ type AuditLog struct {
 }
 
 // PolicyRule represents the parsed JSONB policy structure
+// Updated to support attribute-based authorization instead of role-only
+//
+// Old format (deprecated, will break): {"role": "admin", "resource": "*", "action": ["*"]}
+// New format: {"attribute_name": "role", "attribute_value": "admin", "resource": "*", "action": ["*"]}
 type PolicyRule struct {
-	Role     string   `json:"role"`
-	Resource string   `json:"resource"`
-	Action   []string `json:"action"` // Action array: ["read", "write"] or ["*"]
+	// Deprecated: Use AttributeName and AttributeValue instead
+	Role string `json:"role,omitempty"`
+
+	// New fields for attribute-based authorization
+	AttributeName  string   `json:"attribute_name,omitempty"`  // "role", "department", "level", etc.
+	AttributeValue string   `json:"attribute_value,omitempty"` // "admin", "HR", "5", etc.
+	Resource       string   `json:"resource"`
+	Action         []string `json:"action"` // Action array: ["read", "write"] or ["*"]
 }
 
 // AuthorizeRequest represents an authorization check request
