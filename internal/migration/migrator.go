@@ -363,6 +363,91 @@ func (m *Migrator) GetVersion(ctx context.Context) (*int64, error) {
 	return &latest, nil
 }
 
+// findByVersion locates a migration by its version number
+func (m *Migrator) findByVersion(version int64) (*Migration, error) {
+	for _, mig := range m.migrations {
+		if mig.Version == version {
+			return &mig, nil
+		}
+	}
+	return nil, fmt.Errorf("migration with version %d not found", version)
+}
+
+// FindMigration parses an identifier and returns the matching migration
+// Parsing priority:
+// 1. Full filename (YYYYMMDD_XXX_name.sql) → Extract version via regex
+// 2. Pure number → Parse as version
+// 3. Otherwise → Treat as migration name (exact match)
+func (m *Migrator) FindMigration(identifier string) (*Migration, error) {
+	if identifier == "" {
+		return nil, fmt.Errorf("migration identifier cannot be empty")
+	}
+
+	// Try parsing as full filename first
+	migrationRegex := regexp.MustCompile(`^(\d{8})_(\d{3})_([a-z0-9_]+)\.sql$`)
+	if matches := migrationRegex.FindStringSubmatch(identifier); matches != nil {
+		dateStr := matches[1]
+		seqStr := matches[2]
+
+		dateVal, err := strconv.ParseInt(dateStr, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid date in filename: %w", err)
+		}
+
+		seqVal, err := strconv.ParseInt(seqStr, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid sequence in filename: %w", err)
+		}
+
+		version := dateVal*1000 + seqVal
+		return m.findByVersion(version)
+	}
+
+	// Try parsing as pure version number
+	if version, err := strconv.ParseInt(identifier, 10, 64); err == nil {
+		return m.findByVersion(version)
+	}
+
+	// Try exact name match
+	for _, mig := range m.migrations {
+		if mig.Name == identifier {
+			return &mig, nil
+		}
+	}
+
+	return nil, fmt.Errorf("migration not found: %s", identifier)
+}
+
+// UpOne runs a single migration by identifier (name, version, or filename)
+func (m *Migrator) UpOne(ctx context.Context, identifier string) error {
+	if err := m.InitSchema(ctx); err != nil {
+		return err
+	}
+
+	mig, err := m.FindMigration(identifier)
+	if err != nil {
+		return err
+	}
+
+	// Check if already applied
+	applied, err := m.GetAppliedVersions(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get applied migrations: %w", err)
+	}
+
+	if applied[mig.Version] {
+		return fmt.Errorf("migration %d (%s) is already applied", mig.Version, mig.Name)
+	}
+
+	log.Printf("Applying migration %d: %s\n", mig.Version, mig.Name)
+	if err := m.runMigration(ctx, *mig, mig.Up); err != nil {
+		return fmt.Errorf("migration %d (%s) failed: %w", mig.Version, mig.Name, err)
+	}
+	log.Printf("  ✓ Applied migration %d: %s\n", mig.Version, mig.Name)
+
+	return nil
+}
+
 // Validate checks for common migration issues
 func (m *Migrator) Validate(ctx context.Context) error {
 	versions := make(map[int64]bool)

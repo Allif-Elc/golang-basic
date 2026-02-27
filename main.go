@@ -18,6 +18,7 @@ var (
 	migrateFlag     = flag.Bool("migrate", false, "Run pending database migrations and exit")
 	migrateDownFlag = flag.Bool("migrate-down", false, "Rollback the last migration and exit")
 	migrateStatus   = flag.Bool("migrate-status", false, "Show migration status and exit")
+	migrateOneFlag  = flag.String("migrate-one", "", "Run a specific migration by name, version, or filename and exit")
 )
 
 func main() {
@@ -25,7 +26,7 @@ func main() {
 
 	if err := config.InitDatabase(); err != nil {
 		log.Printf("Warning: Failed to initialize database: %v", err)
-		if *migrateFlag || *migrateDownFlag || *migrateStatus {
+		if *migrateFlag || *migrateDownFlag || *migrateStatus || *migrateOneFlag != "" {
 			log.Fatalf("Database connection required for migration operation: %v", err)
 		}
 		log.Println("Server will continue running without database connection")
@@ -37,6 +38,14 @@ func main() {
 	migrator, err := migration.NewFromFiles(config.DB, "sql")
 	if err != nil {
 		log.Fatalf("Failed to load migrations: %v", err)
+	}
+
+	// Check migrate-one first (most specific)
+	if *migrateOneFlag != "" {
+		if err := runOneMigration(ctx, migrator, *migrateOneFlag); err != nil {
+			log.Fatalf("Migration failed: %v", err)
+		}
+		os.Exit(0)
 	}
 
 	if *migrateFlag {
@@ -117,4 +126,26 @@ func rollbackMigration(ctx context.Context, m *migration.Migrator) error {
 
 func showMigrationStatus(ctx context.Context, m *migration.Migrator) error {
 	return m.Status(ctx)
+}
+
+func runOneMigration(ctx context.Context, m *migration.Migrator, identifier string) error {
+	if err := m.Validate(ctx); err != nil {
+		return fmt.Errorf("migration validation failed: %w", err)
+	}
+
+	log.Printf("Looking for migration: %s\n", identifier)
+	if err := m.UpOne(ctx, identifier); err != nil {
+		return err
+	}
+
+	version, err := m.GetVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get current version: %w", err)
+	}
+
+	if version != nil {
+		log.Printf("Database is now at migration version: %d\n", *version)
+	}
+
+	return nil
 }
