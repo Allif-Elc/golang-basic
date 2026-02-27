@@ -33,9 +33,8 @@ Frontend (React) → Nginx → Go API (Chi v5) → PostgreSQL 17
 cd api
 cp .env.example .env
 go mod download
-psql -U postgres -d golang_basic < sql/abac_schema.sql
-psql -U postgres -d golang_basic < sql/api_docs_schema.sql
-go run main.go
+go run main.go -migrate    # Run migrations first
+go run main.go              # Start server
 
 # Podman (recommended)
 podman-compose up -d
@@ -61,63 +60,58 @@ api/
 └── main.go              # Entry point
 ```
 
-## API Endpoints
+## Database Migrations
 
-**Base URL:** `https://localhost:3003`
+The application includes a built-in migration system that tracks applied migrations and supports rollback.
 
-### Authentication (Public)
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout` (JWT)
+### Built-in Migration (Recommended)
 
-### Users
-- `GET /api/v1/users` (JWT)
-- `POST /api/v1/users` (Public)
-- `GET/PUT /api/v1/users/{id}` (JWT)
-- `PUT /api/v1/users/{id}/password` (JWT)
+```bash
+# Run pending migrations
+go run main.go -migrate
 
-### Profiles
-- `GET /api/v1/profiles` (Optional Auth)
-- `POST /api/v1/profiles` (JWT)
-- `GET/PUT/DELETE /api/v1/profiles/{id}` (JWT)
+# Rollback last migration
+go run main.go -migrate-down
 
-### Projects
-- `GET /api/v1/projects` (Optional Auth)
-- `GET /api/v1/projects/with-stats` (Optional Auth, optimized)
-- `POST /api/v1/projects` (JWT + Permission)
-- `GET /api/v1/projects/{id}` (Optional Auth)
-- `GET /api/v1/projects/{id}/api-stats` (Optional Auth)
-- `PUT /api/v1/projects/{id}` (JWT + Permission)
-- `DELETE /api/v1/projects/{id}` (JWT + Permission)
+# Check migration status
+go run main.go -migrate-status
 
-### REST APIs
-- `GET /api/v1/rest-apis` (JWT + Permission)
-- `GET/PUT/DELETE /api/v1/rest-apis/{id}` (JWT + Permission)
-- `POST /api/v1/projects/{projectID}/rest-apis` (JWT + Permission)
+# Run migrations then start server
+go run main.go -migrate && go run main.go
+```
 
-### GraphQL APIs
-- `GET /api/v1/graphql-apis` (JWT + Permission)
-- `GET/PUT/DELETE /api/v1/graphql-apis/{id}` (JWT + Permission)
-- `POST /api/v1/projects/{projectID}/graphql-apis` (JWT + Permission)
+**Benefits:**
+- Tracks which migrations have been applied
+- Safe transactions with automatic rollback on failure
+- Version tracking prevents duplicate migrations
+- Rollback support for schema changes
 
-### gRPC APIs
-- `GET /api/v1/grpc-apis` (JWT + Permission)
-- `GET/PUT/DELETE /api/v1/grpc-apis/{id}` (JWT + Permission)
-- `POST /api/v1/projects/{projectID}/grpc-apis` (JWT + Permission)
+### Manual Migration (Alternative)
 
-### MinIO Storage
-- `GET /api/v1/minio/upload/{object}` (JWT)
-- `GET /api/v1/minio/download/{object}` (JWT)
+```bash
+# Local psql
+psql -U postgres -d golang_basic < sql/abac_schema.sql
+psql -U postgres -d golang_basic < sql/api_docs_schema.sql
 
-### Permissions (ABAC)
-- `GET/POST /api/v1/permissions/attributes` (Admin)
-- `GET/POST /api/v1/permissions/resources` (Admin)
-- `GET/POST /api/v1/permissions/permissions` (Admin)
+# Podman container
+podman-compose exec -T postgres psql -U postgres -d golang_basic < sql/abac_schema.sql
+podman-compose exec -T postgres psql -U postgres -d golang_basic < sql/api_docs_schema.sql
 
-### Health & Debug
-- `GET /health`, `GET /ping` (Public)
-- `/debug/*` (Admin, pprof endpoints)
+# Verify tables
+podman-compose exec postgres psql -U postgres -d golang_basic -c "\dt"
+podman-compose exec postgres psql -U postgres -d golang_basic -c "\di"
+```
+
+### Migration Files
+
+Naming convention: `YYYYMMDD_XXX_description.sql`
+
+| File | Version | Description |
+|------|---------|-------------|
+| `sql/abac_schema.sql` | 20260225001 | ABAC authorization schema (attributes, policies, permissions) |
+| `sql/api_docs_schema.sql` | 20260225002 | API documentation schema (projects, REST/GraphQL/gRPC APIs) |
+
+**Important:** Migrations run in version order automatically. The built-in system ensures correct execution order.
 
 ## Development
 
