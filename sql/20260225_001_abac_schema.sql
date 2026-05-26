@@ -246,9 +246,9 @@ ALTER TABLE policies SET (autovacuum_analyze_scale_factor = 0.05);
 -- ============================================================================
 
 -- Insert attribute types
-INSERT INTO attributes (id_attribute, name, description, type, enum_values) VALUES
-(1, 'role', 'User role attribute', 'enum', ARRAY['admin','project_manager','tech_lead','developer','technical_writer','viewer']),
-(2, 'department', 'Department attribute', 'enum', ARRAY['engineering','product','hr','finance'])
+INSERT INTO attributes (id_attribute, name, description) VALUES
+(1, 'role', 'User role attribute'),
+(2, 'department', 'Department attribute')
 ON CONFLICT (name) DO NOTHING;
 
 -- Insert sample users
@@ -300,21 +300,21 @@ INSERT INTO user_attributes (id_user, id_attribute, value) VALUES
 ON CONFLICT (id_user, id_attribute, value) DO NOTHING;
 
 -- Insert resources (with resource_type)
-INSERT INTO resources (id_resource, name, description, resource_type) VALUES
-(1, 'projects', 'Project management resources', 'api'),
-(2, 'api_docs_project', 'API Documentation Projects', 'api'),
-(3, 'api_docs_rest_api', 'REST API Documentation', 'api'),
-(4, 'api_docs_graphql_api', 'GraphQL API Documentation', 'api'),
-(5, 'api_docs_grpc_api', 'gRPC API Documentation', 'api')
+INSERT INTO resources (id_resource, name, description) VALUES
+(1, 'projects', 'Project management resources'),
+(2, 'api_docs_project', 'API Documentation Projects'),
+(3, 'api_docs_rest_api', 'REST API Documentation'),
+(4, 'api_docs_graphql_api', 'GraphQL API Documentation'),
+(5, 'api_docs_grpc_api', 'gRPC API Documentation')
 ON CONFLICT (name) DO NOTHING;
 
--- Insert permissions (with effect, actions, condition)
-INSERT INTO permissions (id_permission, name, description, effect, actions, condition) VALUES
-(1, 'create', 'Create new resources', 'allow', ARRAY['create'], NULL),
-(2, 'read', 'View resources', 'allow', ARRAY['read'], NULL),
-(3, 'update', 'Edit resources', 'allow', ARRAY['update'], NULL),
-(4, 'delete', 'Delete resources', 'allow', ARRAY['delete'], NULL),
-(5, 'publish', 'Make resources public', 'allow', ARRAY['publish'], 'is_owner')
+-- Insert permissions
+INSERT INTO permissions (id_permission, name, description) VALUES
+(1, 'create', 'Create new resources'),
+(2, 'read', 'View resources'),
+(3, 'update', 'Edit resources'),
+(4, 'delete', 'Delete resources'),
+(5, 'publish', 'Make resources public')
 ON CONFLICT (name) DO NOTHING;
 
 -- Insert policies (role-based v1 + attribute-based v3 ABAC)
