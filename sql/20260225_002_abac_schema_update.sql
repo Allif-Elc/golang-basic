@@ -43,6 +43,24 @@ ALTER TABLE permissions ADD COLUMN IF NOT EXISTS condition TEXT;
 ALTER TABLE permissions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- ============================================================================
+-- UPDATE SEED DATA FOR NEW FIELDS
+-- ============================================================================
+
+-- Update attributes seed data with type and enum_values
+UPDATE attributes SET type = 'enum', enum_values = ARRAY['admin','project_manager','tech_lead','developer','technical_writer','viewer'] WHERE id_attribute = 1 AND name = 'role';
+UPDATE attributes SET type = 'enum', enum_values = ARRAY['engineering','product','hr','finance'] WHERE id_attribute = 2 AND name = 'department';
+
+-- Update resources seed data with resource_type
+UPDATE resources SET resource_type = 'api' WHERE id_resource IN (1,2,3,4,5);
+
+-- Update permissions seed data with effect, actions, and condition
+UPDATE permissions SET effect = 'allow', actions = ARRAY['create'], condition = NULL WHERE id_permission = 1 AND name = 'create';
+UPDATE permissions SET effect = 'allow', actions = ARRAY['read'], condition = NULL WHERE id_permission = 2 AND name = 'read';
+UPDATE permissions SET effect = 'allow', actions = ARRAY['update'], condition = NULL WHERE id_permission = 3 AND name = 'update';
+UPDATE permissions SET effect = 'allow', actions = ARRAY['delete'], condition = NULL WHERE id_permission = 4 AND name = 'delete';
+UPDATE permissions SET effect = 'allow', actions = ARRAY['publish'], condition = 'is_owner' WHERE id_permission = 5 AND name = 'publish';
+
+-- ============================================================================
 -- INDEXES FOR NEW FIELDS
 -- ============================================================================
 
