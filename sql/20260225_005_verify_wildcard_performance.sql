@@ -21,10 +21,17 @@ CREATE INDEX IF NOT EXISTS idx_policies_rule_resource ON policies ((policy_rule-
 -- Sample test data (for performance testing)
 -- ============================================================================
 
--- Insert sample attributes (skip if exists)
+-- Ensure user 999 exists before referencing it in user_attributes
+INSERT INTO users (id_user, name, email, password_hash, is_active)
+VALUES (999, 'Performance Test Admin', 'perf-test@company.com', '$argon2id$v=19$m=65536,t=3,p=2$pSIkdXLvwu4TBZnviQUd5g$3USJSHpTUpRmjGiKty7PPStQDgvP6NmJeIgIxCnfDHI', true)
+ON CONFLICT (id_user) DO NOTHING;
+
+-- Insert sample attribute with full fields (skip if exists)
 DO $$
 BEGIN
-    INSERT INTO attributes (id_attribute, name) VALUES (1, 'role') ON CONFLICT DO NOTHING;
+    INSERT INTO attributes (id_attribute, name, description, type, enum_values)
+    VALUES (1, 'role', 'User role attribute', 'enum', ARRAY['admin','project_manager','tech_lead','developer','technical_writer','viewer'])
+    ON CONFLICT (name) DO NOTHING;
 END $$;
 
 -- Insert sample user with admin role (skip if exists)
@@ -36,6 +43,8 @@ END $$;
 -- Insert sample wildcard policies (skip if exists)
 DO $$
 BEGIN
+    -- ===== Role-based wildcard policies =====
+
     -- Full wildcard: resource="*", action=["*"]
     INSERT INTO policies (id_policy, name, policy_rule, is_active)
     VALUES (1001, 'Admin All Access', '{"role": "admin", "resource": "*", "action": ["*"]}', true)
@@ -49,6 +58,23 @@ BEGIN
     -- Prefix wildcard: resource="employee_*", action=["read", "write"]
     INSERT INTO policies (id_policy, name, policy_rule, is_active)
     VALUES (1003, 'Employee HR', '{"role": "hr", "resource": "employee_*", "action": ["read", "write"]}', true)
+    ON CONFLICT (id_policy) DO NOTHING;
+
+    -- ===== Attribute-based wildcard policies (ABAC v3) =====
+
+    -- Full wildcard using attribute_name/attribute_value format
+    INSERT INTO policies (id_policy, name, policy_rule, is_active)
+    VALUES (1004, 'Admin All Access (ABAC v3)', '{"attribute_name": "role", "attribute_value": "admin", "resource": "*", "action": ["*"]}', true)
+    ON CONFLICT (id_policy) DO NOTHING;
+
+    -- Prefix wildcard using department attribute
+    INSERT INTO policies (id_policy, name, policy_rule, is_active)
+    VALUES (1005, 'Engineering API Docs (ABAC v3)', '{"attribute_name": "department", "attribute_value": "engineering", "resource": "api_docs_*", "action": ["*"]}', true)
+    ON CONFLICT (id_policy) DO NOTHING;
+
+    -- Prefix wildcard: department-based employee access
+    INSERT INTO policies (id_policy, name, policy_rule, is_active)
+    VALUES (1006, 'HR Employee Records (ABAC v3)', '{"attribute_name": "department", "attribute_value": "hr", "resource": "employee_*", "action": ["read", "write"]}', true)
     ON CONFLICT (id_policy) DO NOTHING;
 END $$;
 

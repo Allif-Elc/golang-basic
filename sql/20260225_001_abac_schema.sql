@@ -246,96 +246,127 @@ ALTER TABLE policies SET (autovacuum_analyze_scale_factor = 0.05);
 -- ============================================================================
 
 -- Insert attribute types
-INSERT INTO attributes (id_attribute, name, description) VALUES
-(1, 'role', 'User role attribute'),
-(2, 'department', 'Department attribute')
+INSERT INTO attributes (id_attribute, name, description, type, enum_values) VALUES
+(1, 'role', 'User role attribute', 'enum', ARRAY['admin','project_manager','tech_lead','developer','technical_writer','viewer']),
+(2, 'department', 'Department attribute', 'enum', ARRAY['engineering','product','hr','finance'])
 ON CONFLICT (name) DO NOTHING;
 
 -- Insert sample users
 INSERT INTO users (id_user, name, email, password_hash, is_active) VALUES
-(1, 'Alice Project Manager', 'alice@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_1', true),
-(2, 'Bob Tech Lead', 'bob@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_2', true),
-(3, 'Charlie Developer', 'charlie@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_3', true),
-(4, 'David Developer', 'david@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_4', true),
-(5, 'Eve Technical Writer', 'eve@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_5', true),
-(6, 'Frank Viewer', 'frank@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_6', true),
-(7, 'Grace Admin', 'grace@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_7', true),
-(8, 'Henry Guest', 'henry@company.com', '$argon2id$v=19$m=65536,t=3,p=2$EXAMPLE_HASH_8', true)
+(1, 'Alice Project Manager', 'alice@company.com', '$argon2id$v=19$m=65536,t=3,p=2$pSIkdXLvwu4TBZnviQUd5g$3USJSHpTUpRmjGiKty7PPStQDgvP6NmJeIgIxCnfDHI', true),
+(2, 'Bob Tech Lead', 'bob@company.com', '$argon2id$v=19$m=65536,t=3,p=2$pSIkdXLvwu4TBZnviQUd5g$3USJSHpTUpRmjGiKty7PPStQDgvP6NmJeIgIxCnfDHI', true),
+(3, 'Charlie Developer', 'charlie@company.com', '$argon2id$v=19$m=65536,t=3,p=2$pSIkdXLvwu4TBZnviQUd5g$3USJSHpTUpRmjGiKty7PPStQDgvP6NmJeIgIxCnfDHI', true),
+(4, 'David Developer', 'david@company.com', '$argon2id$v=19$m=65536,t=3,p=2$pSIkdXLvwu4TBZnviQUd5g$3USJSHpTUpRmjGiKty7PPStQDgvP6NmJeIgIxCnfDHI', true),
+(5, 'Eve Technical Writer', 'eve@company.com', '$argon2id$v=19$m=65536,t=3,p=2$pSIkdXLvwu4TBZnviQUd5g$3USJSHpTUpRmjGiKty7PPStQDgvP6NmJeIgIxCnfDHI', true),
+(6, 'Frank Viewer', 'frank@company.com', '$argon2id$v=19$m=65536,t=3,p=2$pSIkdXLvwu4TBZnviQUd5g$3USJSHpTUpRmjGiKty7PPStQDgvP6NmJeIgIxCnfDHI', true),
+(7, 'Grace Admin', 'grace@company.com', '$argon2id$v=19$m=65536,t=3,p=2$pSIkdXLvwu4TBZnviQUd5g$3USJSHpTUpRmjGiKty7PPStQDgvP6NmJeIgIxCnfDHI', true),
+(8, 'Henry Guest', 'henry@company.com', '$argon2id$v=19$m=65536,t=3,p=2$pSIkdXLvwu4TBZnviQUd5g$3USJSHpTUpRmjGiKty7PPStQDgvP6NmJeIgIxCnfDHI', true)
 ON CONFLICT (email) DO NOTHING;
 
--- Insert sample profiles
-INSERT INTO profiles (id_profile, id_user, age, gender, bio) VALUES
-(1, 1, 35, 'female', 'Alice the Project Manager'),
-(2, 2, 32, 'male', 'Bob the Tech Lead'),
-(3, 3, 28, 'male', 'Charlie the Backend Developer'),
-(4, 4, 26, 'male', 'David the Frontend Developer'),
-(5, 5, 30, 'female', 'Eve the Technical Writer'),
-(6, 6, 25, 'male', 'Frank the Read-only Viewer'),
-(7, 7, 40, 'female', 'Grace the System Admin'),
-(8, 8, 24, 'male', 'Henry the Guest User')
+-- Insert sample profiles (now with phonenumber and website)
+INSERT INTO profiles (id_profile, id_user, age, gender, bio, phonenumber, website) VALUES
+(1, 1, 35, 'female', 'Alice the Project Manager', '+62-812-3456-7890', 'https://alice.dev'),
+(2, 2, 32, 'male', 'Bob the Tech Lead', '+62-813-3456-7890', 'https://bob.dev'),
+(3, 3, 28, 'male', 'Charlie the Backend Developer', '+62-814-3456-7890', 'https://charlie.dev'),
+(4, 4, 26, 'male', 'David the Frontend Developer', '+62-815-3456-7890', 'https://david.dev'),
+(5, 5, 30, 'female', 'Eve the Technical Writer', '+62-816-3456-7890', 'https://eve.dev'),
+(6, 6, 25, 'male', 'Frank the Read-only Viewer', '+62-817-3456-7890', 'https://frank.dev'),
+(7, 7, 40, 'female', 'Grace the System Admin', '+62-818-3456-7890', 'https://grace.dev'),
+(8, 8, 24, 'male', 'Henry the Guest User', '+62-819-3456-7890', 'https://henry.dev')
 ON CONFLICT (id_user) DO NOTHING;
 
--- Assign roles to users
+-- Assign role attributes to users
 INSERT INTO user_attributes (id_user, id_attribute, value) VALUES
-(1, 1, 'project_manager'),  -- alice can manage projects
-(2, 1, 'tech_lead'),        -- bob leads technical teams
-(3, 1, 'developer'),        -- charlie develops APIs
-(4, 1, 'developer'),        -- david develops APIs
-(5, 1, 'technical_writer'), -- eve writes documentation
-(6, 1, 'viewer'),           -- frank only views
-(7, 1, 'admin'),            -- grace has full access
-(8, 1, 'viewer')            -- henry is guest viewer
+(1, 1, 'project_manager'),
+(2, 1, 'tech_lead'),
+(3, 1, 'developer'),
+(4, 1, 'developer'),
+(5, 1, 'technical_writer'),
+(6, 1, 'viewer'),
+(7, 1, 'admin'),
+(8, 1, 'viewer')
 ON CONFLICT (id_user, id_attribute, value) DO NOTHING;
 
--- Insert resources
-INSERT INTO resources (id_resource, name, description) VALUES
-(1, 'projects', 'Project management resources'),
-(2, 'api_docs_project', 'API Documentation Projects'),
-(3, 'api_docs_rest_api', 'REST API Documentation'),
-(4, 'api_docs_graphql_api', 'GraphQL API Documentation'),
-(5, 'api_docs_grpc_api', 'gRPC API Documentation')
+-- Assign department attributes to users (ABAC v3 multi-attribute)
+INSERT INTO user_attributes (id_user, id_attribute, value) VALUES
+(1, 2, 'product'),          -- alice: product dept
+(2, 2, 'engineering'),      -- bob: engineering
+(3, 2, 'engineering'),      -- charlie: engineering
+(4, 2, 'engineering'),      -- david: engineering
+(5, 2, 'product'),          -- eve: product
+(6, 2, 'engineering'),      -- frank: engineering
+(7, 2, 'engineering'),      -- grace: engineering
+(8, 2, 'hr')                -- henry: hr
+ON CONFLICT (id_user, id_attribute, value) DO NOTHING;
+
+-- Insert resources (with resource_type)
+INSERT INTO resources (id_resource, name, description, resource_type) VALUES
+(1, 'projects', 'Project management resources', 'api'),
+(2, 'api_docs_project', 'API Documentation Projects', 'api'),
+(3, 'api_docs_rest_api', 'REST API Documentation', 'api'),
+(4, 'api_docs_graphql_api', 'GraphQL API Documentation', 'api'),
+(5, 'api_docs_grpc_api', 'gRPC API Documentation', 'api')
 ON CONFLICT (name) DO NOTHING;
 
--- Insert permissions
-INSERT INTO permissions (id_permission, name, description) VALUES
-(1, 'create', 'Create new resources'),
-(2, 'read', 'View resources'),
-(3, 'update', 'Edit resources'),
-(4, 'delete', 'Delete resources'),
-(5, 'publish', 'Make resources public')
+-- Insert permissions (with effect, actions, condition)
+INSERT INTO permissions (id_permission, name, description, effect, actions, condition) VALUES
+(1, 'create', 'Create new resources', 'allow', ARRAY['create'], NULL),
+(2, 'read', 'View resources', 'allow', ARRAY['read'], NULL),
+(3, 'update', 'Edit resources', 'allow', ARRAY['update'], NULL),
+(4, 'delete', 'Delete resources', 'allow', ARRAY['delete'], NULL),
+(5, 'publish', 'Make resources public', 'allow', ARRAY['publish'], 'is_owner')
 ON CONFLICT (name) DO NOTHING;
 
--- Insert policies (API Documentation focused)
+-- Insert policies (role-based v1 + attribute-based v3 ABAC)
 INSERT INTO policies (id_policy, name, policy_rule, is_active) VALUES
--- 1: Admin - Full wildcard access
+-- ===== Role-based policies (v1 — backward compatible) =====
+
+-- 1: Admin - Full wildcard access (role-based)
 (1, 'Admin - Full Access',
-'{"role": "admin", "resource": "*", "action": ["*"]}'::jsonb,
-true),
+ '{"role": "admin", "resource": "*", "action": ["*"]}'::jsonb,
+ true),
 
--- 2: Project Manager - Full project CRUD
+-- 2: Project Manager - Full project CRUD (role-based)
 (2, 'Project Manager - Projects CRUD',
-'{"role": "project_manager", "resource": "projects", "action": ["create", "read", "update", "delete"]}'::jsonb,
-true),
+ '{"role": "project_manager", "resource": "projects", "action": ["create","read","update","delete"]}'::jsonb,
+ true),
 
--- 3: Tech Lead - Full API docs access
+-- 3: Tech Lead - Full API docs access (role-based)
 (3, 'Tech Lead - API Docs Full Access',
-'{"role": "tech_lead", "resource": "api_docs_*", "action": ["create", "read", "update", "delete"]}'::jsonb,
-true),
+ '{"role": "tech_lead", "resource": "api_docs_*", "action": ["create","read","update","delete"]}'::jsonb,
+ true),
 
--- 4: Developer - Create and edit API docs
+-- 4: Developer - Create and edit API docs (role-based)
 (4, 'Developer - API Docs CRU',
-'{"role": "developer", "resource": "api_docs_*", "action": ["create", "read", "update"]}'::jsonb,
-true),
+ '{"role": "developer", "resource": "api_docs_*", "action": ["create","read","update"]}'::jsonb,
+ true),
 
--- 5: Technical Writer - Read and update API docs
+-- 5: Technical Writer - Read and update API docs (role-based)
 (5, 'Technical Writer - API Docs RU',
-'{"role": "technical_writer", "resource": "api_docs_*", "action": ["read", "update"]}'::jsonb,
-true),
+ '{"role": "technical_writer", "resource": "api_docs_*", "action": ["read","update"]}'::jsonb,
+ true),
 
--- 6: Viewer - Read-only access
+-- 6: Viewer - Read-only access (role-based)
 (6, 'Viewer - Read Only',
-'{"role": "viewer", "resource": "*", "action": ["read"]}'::jsonb,
-true)
+ '{"role": "viewer", "resource": "*", "action": ["read"]}'::jsonb,
+ true),
+
+-- ===== Attribute-based policies (v3 ABAC — new format) =====
+
+-- 7: Engineering dept - Full API docs access (attribute-based)
+(7, 'Engineering - API Docs Full Access',
+ '{"attribute_name": "department", "attribute_value": "engineering", "resource": "api_docs_*", "action": ["create","read","update","delete"]}'::jsonb,
+ true),
+
+-- 8: Product dept - Read & update docs (attribute-based)
+(8, 'Product - API Docs Read & Update',
+ '{"attribute_name": "department", "attribute_value": "product", "resource": "api_docs_*", "action": ["read","update"]}'::jsonb,
+ true),
+
+-- 9: Admin role (attribute-based v3 — alternative to policy #1)
+(9, 'Admin - Full Access (ABAC v3)',
+ '{"attribute_name": "role", "attribute_value": "admin", "resource": "*", "action": ["*"]}'::jsonb,
+ true)
 ON CONFLICT (name) DO NOTHING;
 
 -- ============================================================================
