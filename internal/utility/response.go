@@ -1,9 +1,19 @@
 package utility
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"sync"
 )
+
+// bufferPool reuses byte buffers for JSON marshaling to reduce GC pressure.
+// Initial capacity 1024 bytes matches most API response sizes.
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return bytes.NewBuffer(make([]byte, 0, 1024))
+	},
+}
 
 type Response struct {
 	Status  string      `json:"status"`
@@ -21,7 +31,18 @@ func SendSuccess(w http.ResponseWriter, statusCode int, message string, data int
 		Data:    data,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	buf := bufferPool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		bufferPool.Put(buf)
+	}()
+
+	if err := json.NewEncoder(buf).Encode(response); err != nil {
+		w.Write([]byte(`{"status":"error","message":"internal server error","data":[]}`))
+		return
+	}
+
+	w.Write(buf.Bytes())
 }
 
 func SendError(w http.ResponseWriter, statusCode int, message string) {
@@ -34,5 +55,15 @@ func SendError(w http.ResponseWriter, statusCode int, message string) {
 		Data:    []interface{}{},
 	}
 
-	json.NewEncoder(w).Encode(response)
+	buf := bufferPool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		bufferPool.Put(buf)
+	}()
+
+	if err := json.NewEncoder(buf).Encode(response); err != nil {
+		return
+	}
+
+	w.Write(buf.Bytes())
 }
