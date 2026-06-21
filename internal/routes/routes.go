@@ -51,7 +51,7 @@ func SetupRoutes() *chi.Mux {
 	policyService := service.NewPolicyService(policyRepo)
 	userPolicyService := service.NewUserPolicyService(userPolicyRepo, authorizationRepo)
 	userAttributeService := service.NewUserAttributeService(userAttributeRepo, permissionRepo, userRepo)
-	projectService := service.NewProjectService(projectRepo)
+	projectService := service.NewProjectService(projectRepo, restAPIRepo, graphqlAPIRepo, grpcAPIRepo)
 	restAPIService := service.NewRestAPIService(restAPIRepo, projectRepo)
 	graphqlAPIService := service.NewGraphQLAPIService(graphqlAPIRepo, projectRepo)
 	grpcAPIService := service.NewGrpcAPIService(grpcAPIRepo, projectRepo)
@@ -111,6 +111,12 @@ func SetupRoutes() *chi.Mux {
 		r.Post("/register", userController.CreateUser)
 		r.Post("/refresh", authController.RefreshToken)
 		r.With(jwtMiddleware.Authenticate()).Post("/logout", authController.Logout)
+	})
+
+	// ========== PUBLIC PROJECTS ROUTES (NO AUTH) ==========
+	// Place before /api/v1/projects to avoid route conflicts
+	r.Route("/api/v1/public", func(r chi.Router) {
+		r.Get("/projects/{slug}/full", projectController.GetPublicProjectDocumentation)
 	})
 
 	// ========== API v1 ROUTES ==========

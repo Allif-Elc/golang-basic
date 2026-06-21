@@ -378,3 +378,74 @@ func (r *RestAPIRepository) FindByProjectID(ctx context.Context, projectID int64
 	req.IDProject = &projectID
 	return r.List(ctx, req)
 }
+
+// ListByProjectIDPaginated retrieves REST APIs for a specific project with pagination
+// Returns APIs, total count, and error
+func (r *RestAPIRepository) ListByProjectIDPaginated(ctx context.Context, projectID int64, page, limit int) ([]model.RestAPI, int, error) {
+	ctx, cancel := r.withTimeout(ctx)
+	defer cancel()
+
+	// Validate pagination parameters
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
+
+	// Main query with explicit columns for performance
+	query := `
+		SELECT id_rest_api, id_project, id_user, name, description, method, endpoint, headers, path_params, query_params, request_body, responses, created_at, updated_at
+		FROM rest_apis
+		WHERE id_project = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+
+	rows, err := r.db.Query(ctx, query, projectID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query REST APIs: %w", err)
+	}
+	defer rows.Close()
+
+	restAPIs := make([]model.RestAPI, 0, limit)
+	for rows.Next() {
+		var restAPI model.RestAPI
+		err := rows.Scan(
+			&restAPI.IDRestAPI,
+			&restAPI.IDProject,
+			&restAPI.IDUser,
+			&restAPI.Name,
+			&restAPI.Description,
+			&restAPI.Method,
+			&restAPI.Endpoint,
+			&restAPI.Headers,
+			&restAPI.PathParams,
+			&restAPI.QueryParams,
+			&restAPI.RequestBody,
+			&restAPI.Responses,
+			&restAPI.CreatedAt,
+			&restAPI.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan REST API: %w", err)
+		}
+		restAPIs = append(restAPIs, restAPI)
+	}
+
+	if rows.Err() != nil {
+		return nil, 0, fmt.Errorf("error iterating REST APIs: %w", rows.Err())
+	}
+
+	// Get total count for pagination metadata
+	countQuery := `SELECT COUNT(*) FROM rest_apis WHERE id_project = $1`
+	var totalCount int
+	err = r.db.QueryRow(ctx, countQuery, projectID).Scan(&totalCount)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count REST APIs: %w", err)
+	}
+
+	return restAPIs, totalCount, nil
+}

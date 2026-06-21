@@ -314,6 +314,74 @@ func (r *GraphQLAPIRepository) FindByProjectID(ctx context.Context, projectID in
 	return r.List(ctx, req)
 }
 
+// ListByProjectIDPaginated retrieves GraphQL APIs for a specific project with pagination
+// Returns APIs, total count, and error
+func (r *GraphQLAPIRepository) ListByProjectIDPaginated(ctx context.Context, projectID int64, page, limit int) ([]model.GraphQLAPI, int, error) {
+	ctx, cancel := r.withTimeout(ctx)
+	defer cancel()
+
+	// Validate pagination parameters
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
+
+	// Main query with explicit columns for performance
+	query := `
+		SELECT id_graphql_api, id_project, id_user, name, type, description, arguments, return_type, examples, created_at, updated_at
+		FROM graphql_apis
+		WHERE id_project = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+
+	rows, err := r.db.Query(ctx, query, projectID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query GraphQL APIs: %w", err)
+	}
+	defer rows.Close()
+
+	graphqlAPIs := make([]model.GraphQLAPI, 0, limit)
+	for rows.Next() {
+		var graphqlAPI model.GraphQLAPI
+		err := rows.Scan(
+			&graphqlAPI.IDGraphqlAPI,
+			&graphqlAPI.IDProject,
+			&graphqlAPI.IDUser,
+			&graphqlAPI.Name,
+			&graphqlAPI.Type,
+			&graphqlAPI.Description,
+			&graphqlAPI.Arguments,
+			&graphqlAPI.ReturnType,
+			&graphqlAPI.Examples,
+			&graphqlAPI.CreatedAt,
+			&graphqlAPI.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan GraphQL API: %w", err)
+		}
+		graphqlAPIs = append(graphqlAPIs, graphqlAPI)
+	}
+
+	if rows.Err() != nil {
+		return nil, 0, fmt.Errorf("error iterating GraphQL APIs: %w", rows.Err())
+	}
+
+	// Get total count for pagination metadata
+	countQuery := `SELECT COUNT(*) FROM graphql_apis WHERE id_project = $1`
+	var totalCount int
+	err = r.db.QueryRow(ctx, countQuery, projectID).Scan(&totalCount)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count GraphQL APIs: %w", err)
+	}
+
+	return graphqlAPIs, totalCount, nil
+}
+
 // BatchGetGraphQLAPIs retrieves multiple GraphQL APIs by their IDs using pgx.Batch
 // Per Specs: use batch queries to prevent N+1 queries
 func (r *GraphQLAPIRepository) BatchGetGraphQLAPIs(ctx context.Context, ids []int64) ([]*model.GraphQLAPI, error) {

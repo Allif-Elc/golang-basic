@@ -5,17 +5,26 @@ import (
 	"fmt"
 	"golang-basic/api/internal/model"
 	"golang-basic/api/internal/repository"
+	"golang.org/x/sync/errgroup"
 	"regexp"
 	"strings"
 	"unicode/utf8"
 )
 
 type ProjectService struct {
-	repo *repository.ProjectRepository
+	repo      *repository.ProjectRepository
+	restRepo   *repository.RestAPIRepository
+	graphqlRepo *repository.GraphQLAPIRepository
+	grpcRepo   *repository.GrpcAPIRepository
 }
 
-func NewProjectService(repo *repository.ProjectRepository) *ProjectService {
-	return &ProjectService{repo: repo}
+func NewProjectService(repo *repository.ProjectRepository, restRepo *repository.RestAPIRepository, graphqlRepo *repository.GraphQLAPIRepository, grpcRepo *repository.GrpcAPIRepository) *ProjectService {
+	return &ProjectService{
+		repo:      repo,
+		restRepo:   restRepo,
+		graphqlRepo: graphqlRepo,
+		grpcRepo:   grpcRepo,
+	}
 }
 
 // CreateProject creates a new project with OWASP-compliant validation
@@ -223,6 +232,84 @@ func (s *ProjectService) GetProjectsByUser(ctx context.Context, userID int64, re
 	}
 
 	return result, nil
+}
+
+// GetPublicProjectDocumentation retrieves full documentation for a public project
+// Uses errgroup to fetch REST, GraphQL, and gRPC APIs concurrently
+// Returns NotFoundError if project doesn't exist or is not public
+func (s *ProjectService) GetPublicProjectDocumentation(ctx context.Context, slug string, page, limit int) (*model.PublicProjectDocumentationResponse, error) {
+	// Find public project by slug
+	project, err := s.repo.FindPublicBySlug(ctx, slug)
+	if err != nil {
+		return nil, err // Already wrapped as NotFoundError
+	}
+
+	// Validate pagination parameters
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	// Use errgroup for concurrent API fetching with bounded concurrency
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(3) // Bound concurrency to 3 goroutines
+
+	var restAPIs []model.RestAPI
+	var graphqlAPIs []model.GraphQLAPI
+	var grpcAPIs []model.GrpcAPI
+	var restTotal, graphqlTotal, grpcTotal int
+
+	// Fetch REST APIs concurrently
+	g.Go(func() error {
+		var err error
+		restAPIs, restTotal, err = s.restRepo.ListByProjectIDPaginated(ctx, project.IDProject, page, limit)
+		return err
+	})
+
+	// Fetch GraphQL APIs concurrently
+	g.Go(func() error {
+		var err error
+		graphqlAPIs, graphqlTotal, err = s.graphqlRepo.ListByProjectIDPaginated(ctx, project.IDProject, page, limit)
+		return err
+	})
+
+	// Fetch gRPC APIs concurrently
+	g.Go(func() error {
+		var err error
+		grpcAPIs, grpcTotal, err = s.grpcRepo.ListByProjectIDPaginated(ctx, project.IDProject, page, limit)
+		return err
+	})
+
+	// Wait for all goroutines to complete
+	if err := g.Wait(); err != nil {
+		return nil, fmt.Errorf("failed to fetch project APIs: %w", err)
+	}
+
+	response := &model.PublicProjectDocumentationResponse{
+		Project: project,
+		Rest: model.PaginatedAPIResponse[model.RestAPI]{
+			Data:  restAPIs,
+			Page:  page,
+			Limit: limit,
+			Total: restTotal,
+		},
+		GraphQL: model.PaginatedAPIResponse[model.GraphQLAPI]{
+			Data:  graphqlAPIs,
+			Page:  page,
+			Limit: limit,
+			Total: graphqlTotal,
+		},
+		Grpc: model.PaginatedAPIResponse[model.GrpcAPI]{
+			Data:  grpcAPIs,
+			Page:  page,
+			Limit: limit,
+			Total: grpcTotal,
+		},
+	}
+
+	return response, nil
 }
 
 // ==================== OWASP COMPLIANT VALIDATION FUNCTIONS ====================

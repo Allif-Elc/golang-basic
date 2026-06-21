@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"golang-basic/api/internal/model"
+	"golang-basic/api/internal/utility"
 	"regexp"
 	"strings"
 
@@ -518,4 +519,33 @@ func generateSlug(name string) string {
 	}
 
 	return slug
+}
+
+// FindPublicBySlug retrieves a public project by its slug
+// Returns NotFoundError if the project doesn't exist or is not public
+func (r *ProjectRepository) FindPublicBySlug(ctx context.Context, slug string) (model.Project, error) {
+	query := `
+		SELECT id_project, id_user, name, slug, description, COALESCE(version, '1.0') as version, is_public, created_at, updated_at
+		FROM projects
+		WHERE slug = $1 AND is_public = true
+	`
+
+	var project model.Project
+	err := r.db.QueryRow(ctx, query, slug).Scan(
+		&project.IDProject,
+		&project.IDUser,
+		&project.Name,
+		&project.Slug,
+		&project.Description,
+		&project.Version,
+		&project.IsPublic,
+		&project.CreatedAt,
+		&project.UpdatedAt,
+	)
+
+	if err != nil {
+		return model.Project{}, utility.NotFoundError("project not found")
+	}
+
+	return project, nil
 }

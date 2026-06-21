@@ -336,6 +336,75 @@ func (r *GrpcAPIRepository) FindByProjectID(ctx context.Context, projectID int64
 	return r.List(ctx, req)
 }
 
+// ListByProjectIDPaginated retrieves gRPC APIs for a specific project with pagination
+// Returns APIs, total count, and error
+func (r *GrpcAPIRepository) ListByProjectIDPaginated(ctx context.Context, projectID int64, page, limit int) ([]model.GrpcAPI, int, error) {
+	ctx, cancel := r.withTimeout(ctx)
+	defer cancel()
+
+	// Validate pagination parameters
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
+
+	// Main query with explicit columns for performance
+	query := `
+		SELECT id_grpc_api, id_project, id_user, service_name, method_name, description, request_message, response_message, proto_definition, examples, created_at, updated_at
+		FROM grpc_apis
+		WHERE id_project = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+
+	rows, err := r.db.Query(ctx, query, projectID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query gRPC APIs: %w", err)
+	}
+	defer rows.Close()
+
+	grpcAPIs := make([]model.GrpcAPI, 0, limit)
+	for rows.Next() {
+		var grpcAPI model.GrpcAPI
+		err := rows.Scan(
+			&grpcAPI.IDGrpcAPI,
+			&grpcAPI.IDProject,
+			&grpcAPI.IDUser,
+			&grpcAPI.ServiceName,
+			&grpcAPI.MethodName,
+			&grpcAPI.Description,
+			&grpcAPI.RequestMessage,
+			&grpcAPI.ResponseMessage,
+			&grpcAPI.ProtoDefinition,
+			&grpcAPI.Examples,
+			&grpcAPI.CreatedAt,
+			&grpcAPI.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan gRPC API: %w", err)
+		}
+		grpcAPIs = append(grpcAPIs, grpcAPI)
+	}
+
+	if rows.Err() != nil {
+		return nil, 0, fmt.Errorf("error iterating gRPC APIs: %w", rows.Err())
+	}
+
+	// Get total count for pagination metadata
+	countQuery := `SELECT COUNT(*) FROM grpc_apis WHERE id_project = $1`
+	var totalCount int
+	err = r.db.QueryRow(ctx, countQuery, projectID).Scan(&totalCount)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count gRPC APIs: %w", err)
+	}
+
+	return grpcAPIs, totalCount, nil
+}
+
 // BatchGetGrpcAPIs retrieves multiple gRPC APIs by their IDs using pgx.Batch
 // Per Specs: use batch queries to prevent N+1 queries
 func (r *GrpcAPIRepository) BatchGetGrpcAPIs(ctx context.Context, ids []int64) ([]*model.GrpcAPI, error) {
