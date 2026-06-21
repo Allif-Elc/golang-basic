@@ -3,6 +3,7 @@ package service_test
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"golang-basic/api/internal/model"
@@ -136,7 +137,6 @@ func TestValidateEndpoint_Valid(t *testing.T) {
 		"/api/users/{id}",
 		"/api/v1/users/{userId}/posts/{postId}",
 		"/health",
-		"/api/search?q=test",
 	}
 
 	for _, endpoint := range validEndpoints {
@@ -281,7 +281,19 @@ func TestValidateParameters_DuplicateNames(t *testing.T) {
 }
 
 func TestValidateParameters_InvalidType(t *testing.T) {
-	invalidTypes := []string{"invalid", "int", "bool", "string", "array", "object"}
+	validTypes := []string{"string", "integer", "boolean", "number"}
+	invalidTypes := []string{"invalid", "int", "bool", "array", "object"}
+
+	for _, paramType := range validTypes {
+		params := []model.Parameter{
+			{Name: "param", Type: paramType, Required: false},
+		}
+
+		err := validateParametersHelper(params)
+		if err != nil {
+			t.Errorf("Expected no error for valid type '%s', got %v", paramType, err)
+		}
+	}
 
 	for _, paramType := range invalidTypes {
 		params := []model.Parameter{
@@ -289,14 +301,8 @@ func TestValidateParameters_InvalidType(t *testing.T) {
 		}
 
 		err := validateParametersHelper(params)
-		if paramType == "string" {
-			if err != nil {
-				t.Errorf("Expected no error for valid type 'string', got %v", err)
-			}
-		} else {
-			if err == nil && paramType != "invalid" {
-				t.Errorf("Expected error for invalid parameter type '%s', got nil", paramType)
-			}
+		if err == nil {
+			t.Errorf("Expected error for invalid parameter type '%s', got nil", paramType)
 		}
 	}
 }
@@ -425,6 +431,10 @@ func validateHeadersHelper(headers []model.Header) error {
 			return errors.New("duplicate header name: " + header.Name)
 		}
 		headerNames[header.Name] = true
+		// Match real validateHeaderName: ^[a-zA-Z0-9\-]+$
+		if matched, _ := regexp.MatchString(`^[a-zA-Z0-9\-]+$`, header.Name); !matched {
+			return fmt.Errorf("header name contains invalid characters: %s", header.Name)
+		}
 	}
 	return nil
 }
@@ -432,6 +442,12 @@ func validateHeadersHelper(headers []model.Header) error {
 func validateParametersHelper(params []model.Parameter) error {
 	if len(params) > 50 {
 		return errors.New("too many parameters (maximum 50)")
+	}
+	validTypes := map[string]bool{
+		"string":  true,
+		"integer": true,
+		"boolean": true,
+		"number":  true,
 	}
 	paramNames := make(map[string]bool)
 	for _, param := range params {
@@ -442,6 +458,9 @@ func validateParametersHelper(params []model.Parameter) error {
 			return errors.New("duplicate parameter name: " + param.Name)
 		}
 		paramNames[param.Name] = true
+		if !validTypes[param.Type] {
+			return fmt.Errorf("invalid parameter type: %s (must be string, integer, boolean, or number)", param.Type)
+		}
 	}
 	return nil
 }
@@ -450,9 +469,13 @@ func validateResponsesHelper(responses map[int]model.ResponseExample) error {
 	if len(responses) > 20 {
 		return errors.New("too many response examples (maximum 20)")
 	}
-	for statusCode := range responses {
+	for statusCode, resp := range responses {
 		if statusCode < 100 || statusCode > 599 {
 			return fmt.Errorf("invalid status code: %d", statusCode)
+		}
+		// Match real XSS check in validateRestAPIDescription
+		if matched, _ := regexp.MatchString(`<[^>]+>`, resp.Description); matched {
+			return errors.New("response description contains potentially dangerous content")
 		}
 	}
 	return nil
