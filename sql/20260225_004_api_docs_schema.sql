@@ -225,19 +225,19 @@ CREATE TRIGGER update_grpc_apis_updated_at BEFORE UPDATE ON grpc_apis
 -- Sample Data (for testing)
 -- ============================================================================
 
--- Sample tags
+-- Sample tags (5 tags for categorization)
 INSERT INTO tags (name, color) VALUES
 ('Authentication', '#FF5733'),
 ('User Management', '#33FF57'),
-('Data Processing', '#3357FF'),
-('Reporting', '#F333FF'),
-('Utilities', '#FF33A8');
+('Catalog', '#3357FF'),
+('Orders', '#F333FF'),
+('Payments', '#FF33A8');
 
--- Sample project (if user with id_user = 1 exists)
+-- Sample project (created by user 1 - Alice Project Manager)
 INSERT INTO projects (id_project, id_user, name, slug, description, version, is_public) VALUES
 (1, 1, 'E-Commerce API', 'e-commerce-api', 'API for e-commerce platform', '1.0', true);
 
--- Sample REST API
+-- Sample REST API (created by user 3 - Charlie Developer)
 INSERT INTO rest_apis (id_rest_api, id_project, id_user, name, description, method, endpoint, headers, path_params, query_params, request_body, responses) VALUES
 (1, 1, 3, 'Create Product', 'Create a new product', 'POST', '/api/products',
     '[{"name": "Content-Type", "description": "Request content type", "required": true, "example": "application/json"}]'::jsonb,
@@ -246,3 +246,49 @@ INSERT INTO rest_apis (id_rest_api, id_project, id_user, name, description, meth
     '{"type": "object", "properties": {"name": {"type": "string"}, "price": {"type": "number"}, "sku": {"type": "string"}}, "required": ["name", "price", "sku"]}'::jsonb,
     '{"200": {"status_code": 200, "description": "Product created successfully", "body": {"id_product": 1, "name": "Widget", "price": 29.99, "sku": "WGT-001"}}}'::jsonb
 );
+
+-- Sample GraphQL API (created by user 3 - Charlie Developer)
+INSERT INTO graphql_apis (id_graphql_api, id_project, id_user, name, type, description, arguments, return_type, examples) VALUES
+(1, 1, 3, 'Get Product', 'query', 'Retrieve a product by ID',
+    '[{"name": "id", "type": "ID!", "description": "Product unique identifier"}]'::jsonb,
+    'Product',
+    '[{"query": "query GetProduct($id: ID!) { product(id: $id) { id name price sku } }", "variables": {"id": "1"}, "response": {"data": {"product": {"id": "1", "name": "Widget", "price": 29.99, "sku": "WGT-001"}}}}]'::jsonb
+);
+
+-- Sample gRPC API (created by user 3 - Charlie Developer)
+INSERT INTO grpc_apis (id_grpc_api, id_project, id_user, service_name, method_name, description, request_message, response_message, proto_definition, examples) VALUES
+(1, 1, 3, 'ProductService', 'CreateProduct', 'Create a new product in the catalog',
+    '[{"name": "name", "type": "string", "description": "Product name", "position": 1}, {"name": "price", "type": "double", "description": "Product price", "position": 2}, {"name": "sku", "type": "string", "description": "Stock keeping unit", "position": 3}]'::jsonb,
+    '[{"name": "id", "type": "int64", "description": "Created product ID", "position": 1}, {"name": "name", "type": "string", "description": "Product name", "position": 2}, {"name": "price", "type": "double", "description": "Product price", "position": 3}]'::jsonb,
+    'service ProductService {
+    rpc CreateProduct (CreateProductRequest) returns (CreateProductResponse);
+}
+
+message CreateProductRequest {
+    string name = 1;
+    double price = 2;
+    string sku = 3;
+}
+
+message CreateProductResponse {
+    int64 id = 1;
+    string name = 2;
+    double price = 3;
+}',
+    '[{"title": "cURL Example", "code": "grpcurl -d \"{\\\"name\\\": \\\"Widget\\\", \\\"price\\\": 29.99, \\\"sku\\\": \\\"WGT-001\\\"}\" localhost:50051 ProductService/CreateProduct", "language": "bash"}]'::jsonb
+);
+
+-- Link tags to APIs (api_tags)
+-- REST API (api_type='rest', id_api=1) tagged with Catalog + Orders + Authentication
+INSERT INTO api_tags (id_api, api_type, id_tag) VALUES
+(1, 'rest', 3),
+(1, 'rest', 4),
+(1, 'rest', 1);
+-- GraphQL API (api_type='graphql', id_api=1) tagged with Catalog + Authentication
+INSERT INTO api_tags (id_api, api_type, id_tag) VALUES
+(1, 'graphql', 3),
+(1, 'graphql', 1);
+-- gRPC API (api_type='grpc', id_api=1) tagged with Catalog + Payments
+INSERT INTO api_tags (id_api, api_type, id_tag) VALUES
+(1, 'grpc', 3),
+(1, 'grpc', 5);

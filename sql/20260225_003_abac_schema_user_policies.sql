@@ -159,6 +159,8 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 -- Note: This sample data assumes the users and policies from abac_schema.sql exist
 -- Run this after abac_schema.sql to ensure foreign key constraints are satisfied
 
+-- ===== Role-based policy assignments (v1 backward compatible) =====
+
 -- Grant user 2 (Bob Tech Lead) admin-like override for projects
 -- Uses policy_id 1 (Admin - Full Access) with high priority
 INSERT INTO user_policies (id_user, id_policy, priority, is_active, created_by)
@@ -169,6 +171,26 @@ ON CONFLICT (id_user, id_policy) DO NOTHING;
 -- Uses policy_id 3 (Tech Lead - Full Access) temporarily
 INSERT INTO user_policies (id_user, id_policy, priority, is_active, expires_at, created_by)
 VALUES (4, 3, 5, true, CURRENT_TIMESTAMP + INTERVAL '30 days', 7)
+ON CONFLICT (id_user, id_policy) DO NOTHING;
+
+-- ===== Attribute-based policy assignments (v3 ABAC) =====
+
+-- Grant user 3 (Charlie Developer, engineering dept) Engineering - Full API docs access
+-- Uses policy_id 7 (Engineering - API Docs Full Access)
+INSERT INTO user_policies (id_user, id_policy, priority, is_active, created_by)
+VALUES (3, 7, 5, true, 7)
+ON CONFLICT (id_user, id_policy) DO NOTHING;
+
+-- Grant user 1 (Alice Project Manager, product dept) Product - Read & Update
+-- Uses policy_id 8 (Product - API Docs Read & Update)
+INSERT INTO user_policies (id_user, id_policy, priority, is_active, created_by)
+VALUES (1, 8, 5, true, 7)
+ON CONFLICT (id_user, id_policy) DO NOTHING;
+
+-- Grant user 7 (Grace Admin) Admin full access via ABAC v3 format
+-- Uses policy_id 9 (Admin - Full Access ABAC v3) with high priority
+INSERT INTO user_policies (id_user, id_policy, priority, is_active, created_by)
+VALUES (7, 9, 10, true, 7)
 ON CONFLICT (id_user, id_policy) DO NOTHING;
 
 -- ============================================================================
