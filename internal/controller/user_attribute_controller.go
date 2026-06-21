@@ -35,7 +35,7 @@ func (c *UserAttributeController) ListUserAttributes(w http.ResponseWriter, r *h
 	if userIDStr := r.URL.Query().Get("user_id"); userIDStr != "" {
 		id, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
-			utility.SendError(w, http.StatusBadRequest, "Invalid user_id parameter")
+			utility.SendErrorResponse(w, utility.ValidationError("Invalid user_id parameter"))
 			return
 		}
 		userID = id
@@ -43,7 +43,7 @@ func (c *UserAttributeController) ListUserAttributes(w http.ResponseWriter, r *h
 
 	attributes, err := c.service.ListUserAttributes(r.Context(), userID)
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError(err.Error()))
 		return
 	}
 
@@ -55,13 +55,13 @@ func (c *UserAttributeController) GetUserAttributeByID(w http.ResponseWriter, r 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid user attribute ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid user attribute ID"))
 		return
 	}
 
 	attribute, err := c.service.GetUserAttributeByID(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -72,13 +72,13 @@ func (c *UserAttributeController) GetUserAttributeByID(w http.ResponseWriter, r 
 func (c *UserAttributeController) CreateUserAttribute(w http.ResponseWriter, r *http.Request) {
 	var req model.CreateUserAttributeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	attribute, err := c.service.CreateUserAttribute(r.Context(), req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -90,19 +90,19 @@ func (c *UserAttributeController) UpdateUserAttribute(w http.ResponseWriter, r *
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid user attribute ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid user attribute ID"))
 		return
 	}
 
 	var req model.UpdateUserAttributeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	attribute, err := c.service.UpdateUserAttribute(r.Context(), id, req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -114,13 +114,13 @@ func (c *UserAttributeController) DeleteUserAttribute(w http.ResponseWriter, r *
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid user attribute ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid user attribute ID"))
 		return
 	}
 
 	err = c.service.DeleteUserAttribute(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 

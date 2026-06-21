@@ -49,13 +49,13 @@ func NewPermissionController(service PermissionServiceInterface) *PermissionCont
 func (c *PermissionController) CreateAttribute(w http.ResponseWriter, r *http.Request) {
 	var req model.CreateAttributesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	attribute, err := c.service.CreateAttribute(r.Context(), req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -67,13 +67,13 @@ func (c *PermissionController) GetAttributeByID(w http.ResponseWriter, r *http.R
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid attribute ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid attribute ID"))
 		return
 	}
 
 	attribute, err := c.service.GetAttributeByID(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (c *PermissionController) GetAttributeByID(w http.ResponseWriter, r *http.R
 func (c *PermissionController) ListAttributes(w http.ResponseWriter, r *http.Request) {
 	attributes, err := c.service.ListAttributes(r.Context())
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError(err.Error()))
 		return
 	}
 
@@ -96,13 +96,13 @@ func (c *PermissionController) DeleteAttribute(w http.ResponseWriter, r *http.Re
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid attribute ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid attribute ID"))
 		return
 	}
 
 	err = c.service.DeleteAttribute(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -114,19 +114,19 @@ func (c *PermissionController) UpdateAttribute(w http.ResponseWriter, r *http.Re
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid attribute ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid attribute ID"))
 		return
 	}
 
 	var req model.UpdateAttributesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	attribute, err := c.service.UpdateAttribute(r.Context(), id, req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -139,13 +139,13 @@ func (c *PermissionController) UpdateAttribute(w http.ResponseWriter, r *http.Re
 func (c *PermissionController) CreateResource(w http.ResponseWriter, r *http.Request) {
 	var req model.CreateResoucesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	resource, err := c.service.CreateResource(r.Context(), req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -157,13 +157,13 @@ func (c *PermissionController) GetResourceByID(w http.ResponseWriter, r *http.Re
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid resource ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid resource ID"))
 		return
 	}
 
 	resource, err := c.service.GetResourceByID(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -174,7 +174,7 @@ func (c *PermissionController) GetResourceByID(w http.ResponseWriter, r *http.Re
 func (c *PermissionController) ListResources(w http.ResponseWriter, r *http.Request) {
 	resources, err := c.service.ListResources(r.Context())
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError(err.Error()))
 		return
 	}
 
@@ -186,13 +186,13 @@ func (c *PermissionController) DeleteResource(w http.ResponseWriter, r *http.Req
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid resource ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid resource ID"))
 		return
 	}
 
 	err = c.service.DeleteResource(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -204,19 +204,19 @@ func (c *PermissionController) UpdateResource(w http.ResponseWriter, r *http.Req
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid resource ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid resource ID"))
 		return
 	}
 
 	var req model.UpdateResourcesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	resource, err := c.service.UpdateResource(r.Context(), id, req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -229,13 +229,13 @@ func (c *PermissionController) UpdateResource(w http.ResponseWriter, r *http.Req
 func (c *PermissionController) CreatePermission(w http.ResponseWriter, r *http.Request) {
 	var req model.CreatePermissionsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	permission, err := c.service.CreatePermission(r.Context(), req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -247,13 +247,13 @@ func (c *PermissionController) GetPermissionByID(w http.ResponseWriter, r *http.
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid permission ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid permission ID"))
 		return
 	}
 
 	permission, err := c.service.GetPermissionByID(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -264,7 +264,7 @@ func (c *PermissionController) GetPermissionByID(w http.ResponseWriter, r *http.
 func (c *PermissionController) ListPermissions(w http.ResponseWriter, r *http.Request) {
 	permissions, err := c.service.ListPermissions(r.Context())
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError(err.Error()))
 		return
 	}
 
@@ -276,13 +276,13 @@ func (c *PermissionController) DeletePermission(w http.ResponseWriter, r *http.R
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid permission ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid permission ID"))
 		return
 	}
 
 	err = c.service.DeletePermission(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -294,19 +294,19 @@ func (c *PermissionController) UpdatePermission(w http.ResponseWriter, r *http.R
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid permission ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid permission ID"))
 		return
 	}
 
 	var req model.UpdatePermissionsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	permission, err := c.service.UpdatePermission(r.Context(), id, req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 

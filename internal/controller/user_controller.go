@@ -31,13 +31,13 @@ func NewUserController(service UserServiceInterface) *UserController {
 func (c *UserController) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req model.CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	user, err := c.service.CreateUser(r.Context(), req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -47,13 +47,13 @@ func (c *UserController) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (c *UserController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	var req model.UpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	err := c.service.UpdateUser(r.Context(), req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -90,7 +90,7 @@ func (c *UserController) GetAllUsers(w http.ResponseWriter, r *http.Request) {
 
 	result, err := c.service.GetAllUsers(r.Context(), pageReq, lastCursor)
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError("Failed to retrieve users"))
 		return
 	}
 
@@ -101,13 +101,13 @@ func (c *UserController) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid user ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid user ID"))
 		return
 	}
 
 	user, err := c.service.GetUserByID(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -118,36 +118,36 @@ func (c *UserController) UpdatePassword(w http.ResponseWriter, r *http.Request) 
 	idStr := chi.URLParam(r, "id")
 	targetUserID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid user ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid user ID"))
 		return
 	}
 
 	ctxUserID := r.Context().Value(middleware.UserIDKey)
 	if ctxUserID == nil {
-		utility.SendError(w, http.StatusUnauthorized, "Unauthorized")
+		utility.SendErrorResponse(w, utility.UnauthorizedError("Unauthorized"))
 		return
 	}
 
 	authenticatedUserID, ok := ctxUserID.(int64)
 	if !ok {
-		utility.SendError(w, http.StatusUnauthorized, "Invalid user context")
+		utility.SendErrorResponse(w, utility.UnauthorizedError("Invalid user context"))
 		return
 	}
 
 	if authenticatedUserID != targetUserID {
-		utility.SendError(w, http.StatusForbidden, "You can only update your own password")
+		utility.SendErrorResponse(w, utility.ForbiddenError("You can only update your own password"))
 		return
 	}
 
 	var req model.UpdatePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	err = c.service.UpdatePassword(r.Context(), targetUserID, req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 

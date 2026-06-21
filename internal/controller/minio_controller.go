@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"encoding/json"
+	"golang-basic/api/internal/utility"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -19,33 +19,31 @@ func NewMinioController(minioService *service.MinioService) *MinioController {
 func (c *MinioController) GetUploadURL(w http.ResponseWriter, r *http.Request) {
 	object := chi.URLParam(r, "object")
 	if object == "" {
-		http.Error(w, "object name is required", http.StatusBadRequest)
+		utility.SendErrorResponse(w, utility.ValidationError("object name is required"))
 		return
 	}
 
 	url, err := c.minioService.GeneratePresignedUploadURL(object)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utility.SendErrorResponse(w, utility.InternalError("Failed to generate upload URL"))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"url": url})
+	utility.SendSuccess(w, http.StatusOK, "Upload URL generated", map[string]string{"url": url})
 }
 
 func (c *MinioController) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 	object := chi.URLParam(r, "object")
 	if object == "" {
-		http.Error(w, "object name is required", http.StatusBadRequest)
+		utility.SendErrorResponse(w, utility.ValidationError("object name is required"))
 		return
 	}
 
 	url, err := c.minioService.GeneratePresignedDownloadURL(object)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utility.SendErrorResponse(w, utility.InternalError("Failed to generate download URL"))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"url": url})
+	utility.SendSuccess(w, http.StatusOK, "Download URL generated", map[string]string{"url": url})
 }

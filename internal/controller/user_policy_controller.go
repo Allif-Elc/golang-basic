@@ -38,7 +38,7 @@ func NewUserPolicyController(service UserPolicyServiceInterface) *UserPolicyCont
 func (c *UserPolicyController) CreateUserPolicy(w http.ResponseWriter, r *http.Request) {
 	var req model.CreateUserPolicyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
@@ -47,7 +47,7 @@ func (c *UserPolicyController) CreateUserPolicy(w http.ResponseWriter, r *http.R
 	// TODO: Extract user ID from JWT context when available
 	userPolicy, err := c.service.CreateUserPolicy(r.Context(), &req, nil)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -59,13 +59,13 @@ func (c *UserPolicyController) GetUserPolicyByID(w http.ResponseWriter, r *http.
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid user policy ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid user policy ID"))
 		return
 	}
 
 	userPolicy, err := c.service.GetUserPolicyByID(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -77,7 +77,7 @@ func (c *UserPolicyController) GetUserPolicyByID(w http.ResponseWriter, r *http.
 func (c *UserPolicyController) ListUserPolicies(w http.ResponseWriter, r *http.Request) {
 	userPolicies, err := c.service.ListUserPolicies(r.Context())
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError(err.Error()))
 		return
 	}
 
@@ -89,7 +89,7 @@ func (c *UserPolicyController) ListUserPolicies(w http.ResponseWriter, r *http.R
 func (c *UserPolicyController) ListUserPolicyDetails(w http.ResponseWriter, r *http.Request) {
 	details, err := c.service.ListUserPolicyDetails(r.Context())
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError(err.Error()))
 		return
 	}
 
@@ -102,13 +102,13 @@ func (c *UserPolicyController) GetUserPoliciesByUserID(w http.ResponseWriter, r 
 	userIDStr := chi.URLParam(r, "userId")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid user ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid user ID"))
 		return
 	}
 
 	userPolicies, err := c.service.ListUserPoliciesByUserID(r.Context(), userID)
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError(err.Error()))
 		return
 	}
 
@@ -121,19 +121,19 @@ func (c *UserPolicyController) UpdateUserPolicy(w http.ResponseWriter, r *http.R
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid user policy ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid user policy ID"))
 		return
 	}
 
 	var req model.UpdateUserPolicyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	userPolicy, err := c.service.UpdateUserPolicy(r.Context(), id, &req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -145,13 +145,13 @@ func (c *UserPolicyController) DeleteUserPolicy(w http.ResponseWriter, r *http.R
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid user policy ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid user policy ID"))
 		return
 	}
 
 	err = c.service.DeleteUserPolicy(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -163,7 +163,7 @@ func (c *UserPolicyController) DeleteUserPolicy(w http.ResponseWriter, r *http.R
 func (c *UserPolicyController) ListPolicies(w http.ResponseWriter, r *http.Request) {
 	policies, err := c.service.ListPolicies(r.Context())
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError(err.Error()))
 		return
 	}
 

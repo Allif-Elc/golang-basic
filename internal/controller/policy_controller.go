@@ -32,13 +32,13 @@ func NewPolicyController(service PolicyServiceInterface) *PolicyController {
 func (c *PolicyController) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 	var req model.CreatePolicyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	policy, err := c.service.CreatePolicy(r.Context(), req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -50,13 +50,13 @@ func (c *PolicyController) GetPolicyByID(w http.ResponseWriter, r *http.Request)
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid policy ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid policy ID"))
 		return
 	}
 
 	policy, err := c.service.GetPolicyByID(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -67,7 +67,7 @@ func (c *PolicyController) GetPolicyByID(w http.ResponseWriter, r *http.Request)
 func (c *PolicyController) ListPolicies(w http.ResponseWriter, r *http.Request) {
 	policies, err := c.service.ListPolicies(r.Context())
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError(err.Error()))
 		return
 	}
 
@@ -79,19 +79,19 @@ func (c *PolicyController) UpdatePolicy(w http.ResponseWriter, r *http.Request) 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid policy ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid policy ID"))
 		return
 	}
 
 	var req model.UpdatePolicyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	policy, err := c.service.UpdatePolicy(r.Context(), id, req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -103,13 +103,13 @@ func (c *PolicyController) DeletePolicy(w http.ResponseWriter, r *http.Request) 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid policy ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid policy ID"))
 		return
 	}
 
 	err = c.service.DeletePolicy(r.Context(), id)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 

@@ -21,6 +21,7 @@ type ProjectServiceInterface interface {
 	GetAPIStats(ctx context.Context, projectID int64) (map[string]int64, error)
 	ListProjects(ctx context.Context, req model.ListProjectsRequest) (*model.PageResult[model.Project], error)
 	ListProjectsWithStats(ctx context.Context, req model.ListProjectsRequest) (*model.PageResult[model.ProjectWithStats], error)
+	GetPublicProjectDocumentation(ctx context.Context, slug string, page, limit int) (*model.PublicProjectDocumentationResponse, error)
 }
 
 type ProjectController struct {
@@ -36,21 +37,21 @@ func (c *ProjectController) CreateProject(w http.ResponseWriter, r *http.Request
 	// Extract userID from context
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
 	if !ok {
-		utility.SendError(w, http.StatusUnauthorized, "User ID not found in context")
+		utility.SendErrorResponse(w, utility.UnauthorizedError("User ID not found in context"))
 		return
 	}
 
 	// Parse request body
 	var req model.CreateProjectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	// Create project
 	project, err := c.service.CreateProject(r.Context(), userID, req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -63,14 +64,14 @@ func (c *ProjectController) GetProjectByID(w http.ResponseWriter, r *http.Reques
 	projectIDStr := chi.URLParam(r, "id")
 	projectID, err := strconv.ParseInt(projectIDStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid project ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid project ID"))
 		return
 	}
 
 	// Get project
 	project, err := c.service.GetProjectByID(r.Context(), projectID)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -83,21 +84,21 @@ func (c *ProjectController) UpdateProject(w http.ResponseWriter, r *http.Request
 	projectIDStr := chi.URLParam(r, "id")
 	projectID, err := strconv.ParseInt(projectIDStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid project ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid project ID"))
 		return
 	}
 
 	// Parse request body
 	var req model.UpdateProjectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	// Update project
 	project, err := c.service.UpdateProject(r.Context(), projectID, req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -110,14 +111,14 @@ func (c *ProjectController) DeleteProject(w http.ResponseWriter, r *http.Request
 	projectIDStr := chi.URLParam(r, "id")
 	projectID, err := strconv.ParseInt(projectIDStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid project ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid project ID"))
 		return
 	}
 
 	// Delete project and get deleted counts
 	deletedCounts, err := c.service.DeleteProject(r.Context(), projectID)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -133,14 +134,14 @@ func (c *ProjectController) GetProjectAPIStats(w http.ResponseWriter, r *http.Re
 	projectIDStr := chi.URLParam(r, "id")
 	projectID, err := strconv.ParseInt(projectIDStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid project ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid project ID"))
 		return
 	}
 
 	// Get API stats
 	stats, err := c.service.GetAPIStats(r.Context(), projectID)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, "Project not found")
+		utility.SendErrorResponse(w, utility.NotFoundError("Project not found"))
 		return
 	}
 
@@ -175,7 +176,7 @@ func (c *ProjectController) ListProjects(w http.ResponseWriter, r *http.Request)
 	// List projects
 	result, err := c.service.ListProjects(r.Context(), req)
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError("Failed to retrieve projects"))
 		return
 	}
 
@@ -211,7 +212,7 @@ func (c *ProjectController) ListProjectsWithStats(w http.ResponseWriter, r *http
 	// List projects with stats in single query
 	result, err := c.service.ListProjectsWithStats(r.Context(), req)
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError("Failed to retrieve projects with stats"))
 		return
 	}
 
@@ -226,4 +227,38 @@ func parseIntQuery(r *http.Request, key string, defaultValue int) int {
 		}
 	}
 	return defaultValue
+}
+
+// GetPublicProjectDocumentation retrieves full documentation for a public project
+// This is a public endpoint (no authentication required)
+func (c *ProjectController) GetPublicProjectDocumentation(w http.ResponseWriter, r *http.Request) {
+	// Extract slug from URL
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid slug"))
+		return
+	}
+
+	// Parse pagination parameters
+	page := parseIntQuery(r, "page", 1)
+	limit := parseIntQuery(r, "limit", 20)
+
+	// Enforce max limit for performance
+	if limit > 100 {
+		limit = 100
+	}
+
+	// Get public project documentation
+	response, err := c.service.GetPublicProjectDocumentation(r.Context(), slug, page, limit)
+	if err != nil {
+		// Check if it's a not found error
+		if utility.IsNotFoundError(err) {
+			utility.SendErrorResponse(w, utility.NotFoundError("Project not found"))
+			return
+		}
+		utility.SendErrorResponse(w, utility.InternalError("Failed to retrieve documentation"))
+		return
+	}
+
+	utility.SendSuccess(w, http.StatusOK, "Documentation retrieved", response)
 }

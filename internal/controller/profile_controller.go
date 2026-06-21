@@ -33,20 +33,20 @@ func NewProfileController(service ProfileServiceInterface) *ProfileController {
 
 func (c *ProfileController) CreateProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		utility.SendErrorResponse(w, utility.ValidationError("Method not allowed"))
 		return
 	}
 
 	var req model.CreateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	ctx := r.Context()
 	profile, err := c.service.CreateProfile(ctx, req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -55,20 +55,20 @@ func (c *ProfileController) CreateProfile(w http.ResponseWriter, r *http.Request
 
 func (c *ProfileController) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut && r.Method != http.MethodPatch {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		utility.SendErrorResponse(w, utility.ValidationError("Method not allowed"))
 		return
 	}
 
 	var req model.UpdateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid request body")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid request body"))
 		return
 	}
 
 	ctx := r.Context()
 	profile, err := c.service.UpdateProfile(ctx, req)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -77,7 +77,7 @@ func (c *ProfileController) UpdateProfile(w http.ResponseWriter, r *http.Request
 
 func (c *ProfileController) GetAllProfiles(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		utility.SendErrorResponse(w, utility.ValidationError("Method not allowed"))
 		return
 	}
 
@@ -101,7 +101,7 @@ func (c *ProfileController) GetAllProfiles(w http.ResponseWriter, r *http.Reques
 	ctx := r.Context()
 	profiles, err := c.service.GetAllProfiles(ctx, req, cursor)
 	if err != nil {
-		utility.SendError(w, http.StatusInternalServerError, err.Error())
+		utility.SendErrorResponse(w, utility.InternalError("Failed to retrieve profiles"))
 		return
 	}
 
@@ -110,7 +110,7 @@ func (c *ProfileController) GetAllProfiles(w http.ResponseWriter, r *http.Reques
 
 func (c *ProfileController) GetProfileByID(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		utility.SendErrorResponse(w, utility.ValidationError("Method not allowed"))
 		return
 	}
 
@@ -126,14 +126,14 @@ func (c *ProfileController) GetProfileByID(w http.ResponseWriter, r *http.Reques
 
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid profile ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid profile ID"))
 		return
 	}
 
 	ctx := r.Context()
 	profile, err := c.service.GetProfileByID(ctx, id)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
@@ -142,7 +142,7 @@ func (c *ProfileController) GetProfileByID(w http.ResponseWriter, r *http.Reques
 
 func (c *ProfileController) GetProfileByUserID(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		utility.SendErrorResponse(w, utility.ValidationError("Method not allowed"))
 		return
 	}
 
@@ -154,20 +154,20 @@ func (c *ProfileController) GetProfileByUserID(w http.ResponseWriter, r *http.Re
 	if userIDStr != "" {
 		userID, err = strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
-			utility.SendError(w, http.StatusBadRequest, "Invalid user ID")
+			utility.SendErrorResponse(w, utility.ValidationError("Invalid user ID"))
 			return
 		}
 	} else {
 		// Fallback to context (for backward compatibility - fix the key to use middleware.UserIDKey)
 		userIDValue := r.Context().Value(middleware.UserIDKey)
 		if userIDValue == nil {
-			utility.SendError(w, http.StatusUnauthorized, "User not authenticated")
+			utility.SendErrorResponse(w, utility.UnauthorizedError("User not authenticated"))
 			return
 		}
 		var ok bool
 		userID, ok = userIDValue.(int64)
 		if !ok {
-			utility.SendError(w, http.StatusUnauthorized, "Invalid user ID")
+			utility.SendErrorResponse(w, utility.UnauthorizedError("Invalid user context"))
 			return
 		}
 	}
@@ -175,7 +175,7 @@ func (c *ProfileController) GetProfileByUserID(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 	profile, err := c.service.GetProfileByUserID(ctx, userID)
 	if err != nil {
-		utility.SendError(w, http.StatusNotFound, "Profile not found")
+		utility.SendErrorResponse(w, utility.NotFoundError("Profile not found"))
 		return
 	}
 
@@ -184,7 +184,7 @@ func (c *ProfileController) GetProfileByUserID(w http.ResponseWriter, r *http.Re
 
 func (c *ProfileController) DeleteProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
-		utility.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		utility.SendErrorResponse(w, utility.ValidationError("Method not allowed"))
 		return
 	}
 
@@ -200,13 +200,13 @@ func (c *ProfileController) DeleteProfile(w http.ResponseWriter, r *http.Request
 
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utility.SendError(w, http.StatusBadRequest, "Invalid profile ID")
+		utility.SendErrorResponse(w, utility.ValidationError("Invalid profile ID"))
 		return
 	}
 
 	ctx := r.Context()
 	if err := c.service.DeleteProfile(ctx, id); err != nil {
-		utility.SendError(w, http.StatusNotFound, err.Error())
+		utility.SendErrorResponse(w, err)
 		return
 	}
 
