@@ -121,6 +121,12 @@ func GetHTTPStatusForError(err error) int {
 	// Fallback to error message analysis
 	errMsg := strings.ToLower(err.Error())
 
+	// Check for unauthorized (must come before "not found" since "user id not found" contains both)
+	if strings.Contains(errMsg, "unauthorized") ||
+		strings.Contains(errMsg, "user id not found") {
+		return http.StatusUnauthorized
+	}
+
 	// Check for not found
 	if strings.Contains(errMsg, "not found") {
 		return http.StatusNotFound
@@ -133,12 +139,6 @@ func GetHTTPStatusForError(err error) int {
 		strings.Contains(errMsg, "too") ||
 		strings.Contains(errMsg, "potentially dangerous") {
 		return http.StatusBadRequest
-	}
-
-	// Check for unauthorized
-	if strings.Contains(errMsg, "unauthorized") ||
-		strings.Contains(errMsg, "user id not found") {
-		return http.StatusUnauthorized
 	}
 
 	// Check for forbidden

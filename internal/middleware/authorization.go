@@ -2,9 +2,9 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"golang-basic/api/internal/model"
+	"golang-basic/api/internal/utility"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,7 +35,7 @@ func (m *AuthorizationMiddleware) RequirePermission(resource, action string) fun
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID, err := m.extractUserID(r)
 			if err != nil {
-				m.sendErrorResponse(w, http.StatusUnauthorized, "Failed to extract user ID", err)
+				utility.SendErrorResponse(w, utility.UnauthorizedError("Failed to extract user ID"))
 				return
 			}
 
@@ -47,13 +47,13 @@ func (m *AuthorizationMiddleware) RequirePermission(resource, action string) fun
 
 			authResp, err := m.authService.Authorize(r.Context(), authReq)
 			if err != nil {
-				m.sendErrorResponse(w, http.StatusInternalServerError, "Authorization check failed", err)
+				utility.SendErrorResponse(w, utility.InternalError("Authorization check failed"))
 				return
 			}
 
 			// Check if authorized
 			if !authResp.Allowed {
-				m.sendErrorResponse(w, http.StatusForbidden, authResp.Reason, nil)
+				utility.SendErrorResponse(w, utility.ForbiddenError(authResp.Reason))
 				return
 			}
 
@@ -70,13 +70,13 @@ func (m *AuthorizationMiddleware) RequirePermissionCustom(
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID, err := m.extractUserID(r)
 			if err != nil {
-				m.sendErrorResponse(w, http.StatusUnauthorized, "Failed to extract user ID", err)
+				utility.SendErrorResponse(w, utility.UnauthorizedError("Failed to extract user ID"))
 				return
 			}
 
 			// Extract resource and action dynamically
-			resource, action := resourceExtractor(r)
-			resource, action = actionExtractor(r)
+			resource, _ := resourceExtractor(r)
+			_, action := actionExtractor(r)
 
 			// Perform authorization check
 			authReq := model.AuthorizeRequest{
@@ -87,12 +87,12 @@ func (m *AuthorizationMiddleware) RequirePermissionCustom(
 
 			authResp, err := m.authService.Authorize(r.Context(), authReq)
 			if err != nil {
-				m.sendErrorResponse(w, http.StatusInternalServerError, "Authorization check failed", err)
+				utility.SendErrorResponse(w, utility.InternalError("Authorization check failed"))
 				return
 			}
 
 			if !authResp.Allowed {
-				m.sendErrorResponse(w, http.StatusForbidden, authResp.Reason, nil)
+				utility.SendErrorResponse(w, utility.ForbiddenError(authResp.Reason))
 				return
 			}
 
@@ -106,7 +106,7 @@ func (m *AuthorizationMiddleware) RequireRole(requiredRole string) func(http.Han
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID, err := m.extractUserID(r)
 			if err != nil {
-				m.sendErrorResponse(w, http.StatusUnauthorized, "Failed to extract user ID", err)
+				utility.SendErrorResponse(w, utility.UnauthorizedError("Failed to extract user ID"))
 				return
 			}
 
@@ -119,13 +119,13 @@ func (m *AuthorizationMiddleware) RequireRole(requiredRole string) func(http.Han
 
 			authResp, err := m.authService.Authorize(r.Context(), authReq)
 			if err != nil {
-				m.sendErrorResponse(w, http.StatusInternalServerError, "Role check failed", err)
+				utility.SendErrorResponse(w, utility.InternalError("Role check failed"))
 				return
 			}
 
 			if !authResp.Allowed {
-				m.sendErrorResponse(w, http.StatusForbidden,
-					fmt.Sprintf("Role '%s' required", requiredRole), nil)
+				utility.SendErrorResponse(w, utility.ForbiddenError(
+					fmt.Sprintf("Role '%s' required", requiredRole)))
 				return
 			}
 
@@ -159,22 +159,6 @@ func (m *AuthorizationMiddleware) extractUserID(r *http.Request) (int64, error) 
 	}
 
 	return 0, fmt.Errorf("user ID not found in request")
-}
-
-func (m *AuthorizationMiddleware) sendErrorResponse(w http.ResponseWriter, status int, message string, err error) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-
-	response := map[string]interface{}{
-		"status":  "error",
-		"message": message,
-	}
-
-	if err != nil {
-		response["error"] = err.Error()
-	}
-
-	json.NewEncoder(w).Encode(response)
 }
 
 func ResourceFromPath(r *http.Request) string {
